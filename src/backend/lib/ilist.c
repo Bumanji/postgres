@@ -16,6 +16,23 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * ilist.c
+ *	  支持集成/内嵌式的双链表和单链表
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
+ * IDENTIFICATION
+ *	  src/backend/lib/ilist.c
+ *
+ * 注意
+ *	  本文件只包含太长而不能内联的函数。大部分好东西都在ilist.h文件中。
+ *
+ *-------------------------------------------------------------------------
+ */
 #include "postgres.h"
 
 #include "lib/ilist.h"
