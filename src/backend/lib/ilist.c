@@ -44,6 +44,13 @@
  *
  * Caution: this is O(n); consider using slist_delete_current() instead.
  */
+/*
+ * 从链表中删除“节点”。
+ *
+ * 不允许删除不在“head”指向的链表中的“节点”
+ *
+ * 注意：时间复杂度为O(n)；考虑使用slist_delete_current()。
+ */
 void
 slist_delete(slist_head *head, slist_node *node)
 {
