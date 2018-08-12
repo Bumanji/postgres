@@ -261,6 +261,13 @@ typedef struct dlist_head
 	 * head.prev either points to the last element of the list; to &head if
 	 * it's a circular empty list; or to NULL if empty and not circular.
 	 */
+	/*
+	 * head.next指向链表的第一个元素；如果是循环空链表则指向&head；如果是非循环空链表
+	 * 则指向NULL。
+	 *
+	 * head.prev指向链表的最后一个元素；如果是循环空链表则指向&head；如果是非循环空链表
+	 * 则指向NULL。
+	 */
 	dlist_node	head;
 } dlist_head;
 
