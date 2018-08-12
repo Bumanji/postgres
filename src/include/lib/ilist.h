@@ -103,6 +103,112 @@
  *		src/include/lib/ilist.h
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * ilist.h
+ *		集成/内嵌式的双链表/单链表
+ *
+ * 如果一个对象只能包含在一组预先确定的链表中，那么就适合使用这些类型的链表。链表的指针
+ * 直接嵌入到这些对象中，所以不需要额外的内存管理消耗。（当然，如果现有的对象中只有一小部分
+ * 在链表中，那么其余对象中的链表指针域就浪费掉了。但是通常来讲，还是比单独分配链表节点节省
+ * 了空间。）
+ * ## 译注：内嵌式的链表，只需要在对象结构体中增加一个链表节点。此节点包含指向后一个链表节点
+ * 的指针。如果是双向链表，那么这个链表节点还包含指向前一个链表节点的指针；但如果是单独分配的
+ * 链表节点，除了包含指向前后链表节点的指针外，还需要包含指向对象的指针。另外，还有一种链表实现
+ * 方式是直接在对象中增加指向前后对象的指针域，但这种方法通用性不强。
+ * 
+ * 这里所有的函数都不会分配内存；它们只是使用外部管理的内存。单链表和双链表的API在它们能力所
+ * 允许的范围内是相同的。
+ *
+ * 每个链表都有一个表头，就算链表为空也会有表头。一个空的单链表，会在其表头中有个指向NULL的指针。
+ * An empty singly-linked list has a NULL pointer in its header.
+ * There are two kinds of empty doubly linked lists: those that have been
+ * initialized to NULL, and those that have been initialized to circularity.
+ * (If a dlist is modified and then all its elements are deleted, it will be
+ * in the circular state.)	We prefer circular dlists because there are some
+ * operations that can be done without branches (and thus faster) on lists
+ * that use circular representation.  However, it is often convenient to
+ * initialize list headers to zeroes rather than setting them up with an
+ * explicit initialization function, so we also allow the other case.
+ *
+ * EXAMPLES
+ *
+ * Here's a simple example demonstrating how this can be used.  Let's assume
+ * we want to store information about the tables contained in a database.
+ *
+ * #include "lib/ilist.h"
+ *
+ * // Define struct for the databases including a list header that will be
+ * // used to access the nodes in the table list later on.
+ * typedef struct my_database
+ * {
+ *		char	   *datname;
+ *		dlist_head	tables;
+ *		// ...
+ * } my_database;
+ *
+ * // Define struct for the tables.  Note the list_node element which stores
+ * // prev/next list links.  The list_node element need not be first.
+ * typedef struct my_table
+ * {
+ *		char	   *tablename;
+ *		dlist_node	list_node;
+ *		perm_t		permissions;
+ *		// ...
+ * } my_table;
+ *
+ * // create a database
+ * my_database *db = create_database();
+ *
+ * // and add a few tables to its table list
+ * dlist_push_head(&db->tables, &create_table(db, "a")->list_node);
+ * ...
+ * dlist_push_head(&db->tables, &create_table(db, "b")->list_node);
+ *
+ *
+ * To iterate over the table list, we allocate an iterator variable and use
+ * a specialized looping construct.  Inside a dlist_foreach, the iterator's
+ * 'cur' field can be used to access the current element.  iter.cur points to
+ * a 'dlist_node', but most of the time what we want is the actual table
+ * information; dlist_container() gives us that, like so:
+ *
+ * dlist_iter	iter;
+ * dlist_foreach(iter, &db->tables)
+ * {
+ *		my_table   *tbl = dlist_container(my_table, list_node, iter.cur);
+ *		printf("we have a table: %s in database %s\n",
+ *			   tbl->tablename, db->datname);
+ * }
+ *
+ *
+ * While a simple iteration is useful, we sometimes also want to manipulate
+ * the list while iterating.  There is a different iterator element and looping
+ * construct for that.  Suppose we want to delete tables that meet a certain
+ * criterion:
+ *
+ * dlist_mutable_iter miter;
+ * dlist_foreach_modify(miter, &db->tables)
+ * {
+ *		my_table   *tbl = dlist_container(my_table, list_node, miter.cur);
+ *
+ *		if (!tbl->to_be_deleted)
+ *			continue;		// don't touch this one
+ *
+ *		// unlink the current table from the linked list
+ *		dlist_delete(miter.cur);
+ *		// as these lists never manage memory, we can still access the table
+ *		// after it's been unlinked
+ *		drop_table(db, tbl);
+ * }
+ *
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ * IDENTIFICATION
+ *		src/include/lib/ilist.h
+ *-------------------------------------------------------------------------
+ */
 #ifndef ILIST_H
 #define ILIST_H
 
@@ -110,12 +216,20 @@
  * Enable for extra debugging. This is rather expensive, so it's not enabled by
  * default even when USE_ASSERT_CHECKING.
  */
+/*
+ * 开启额外的调试功能。这个操作太过昂贵，所以就算定义了USE_ASSERT_CHECKING宏，默认也不会开启。
+ */
 /* #define ILIST_DEBUG */
 
 /*
  * Node of a doubly linked list.
  *
  * Embed this in structs that need to be part of a doubly linked list.
+ */
+/*
+ * 双链表的节点
+ *
+ * 嵌入在结构体中，作为某个双链表的一部分。
  */
 typedef struct dlist_node dlist_node;
 struct dlist_node
@@ -131,6 +245,12 @@ struct dlist_node
  * advantage of not needing any branches in the most common list manipulations.
  * An empty list can also be represented as a pair of NULL pointers, making
  * initialization easier.
+ */
+/*
+ * 双链表的表头。
+ *
+ * 非空链表内部是循环链表。循环链表的好处是，在链表的大部分通用操作中不需要分支判断。
+ * 一个空链表也可以表示为一对指向NULL的指针，这也使得初始化链表更简单。
  */
 typedef struct dlist_head
 {
