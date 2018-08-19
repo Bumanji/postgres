@@ -283,10 +283,21 @@ typedef struct dlist_head
  * NB: We use an extra "end" field here to avoid multiple evaluations of
  * arguments in the dlist_foreach() macro.
  */
+/*
+ * 双链表迭代器。
+ *
+ * 作为dlist_foreach()和dlist_reverse_foreach()中的状态使用。使用'cur'成员获取
+ * 迭代的当前元素。
+ *
+ * 在迭代的过程中，*不*允许修改被迭代的链表！
+ *
+ * 注意：我们使用了一个额外的"end"域，用来避免在dlist_foreach()宏里面对参数进行
+ * 多次求值。
+ */
 typedef struct dlist_iter
 {
-	dlist_node *cur;			/* current element */
-	dlist_node *end;			/* last node we'll iterate to */
+	dlist_node *cur;			/* current element *//* 当前元素 */
+	dlist_node *end;			/* last node we'll iterate to *//* 我们迭代的最后一个节点 */
 } dlist_iter;
 
 /*
