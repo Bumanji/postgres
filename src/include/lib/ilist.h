@@ -313,11 +313,22 @@ typedef struct dlist_iter
  * NB: We need a separate type for mutable iterations so that we can store
  * the 'next' node of the current node in case it gets deleted or modified.
  */
+/*
+ * 可以在迭代的时候进行修改的双链表迭代器。
+ *
+ * 作为dlist_foreach_modify()中的状态使用。使用'cur'成员获取迭代的当前元素。
+ *
+ * 使用此类型迭代器的迭代，只允许修改链表当前迭代到的元素。可以修改当前节点，但是*不*能
+ * 插入或删除相邻节点。
+ *
+ * 注意：我们需要一个单独的类型，用来进行可修改的迭代。这样我们可以将当前节点的'下一个'节点存储
+ * 起来，以防它被删除或者修改了。
+ */
 typedef struct dlist_mutable_iter
 {
-	dlist_node *cur;			/* current element */
-	dlist_node *next;			/* next node we'll iterate to */
-	dlist_node *end;			/* last node we'll iterate to */
+	dlist_node *cur;			/* current element *//* 当前元素 */
+	dlist_node *next;			/* next node we'll iterate to *//* 我们将要迭代的下一个节点 */
+	dlist_node *end;			/* last node we'll iterate to *//* 我们将要迭代的最后一个节点 */
 } dlist_mutable_iter;
 
 /*
