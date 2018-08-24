@@ -336,6 +336,11 @@ typedef struct dlist_mutable_iter
  *
  * Embed this in structs that need to be part of a singly linked list.
  */
+/*
+ * 单链表的节点。
+ *
+ * 嵌入到需要成为单链表一部分的结构体中。
+ */
 typedef struct slist_node slist_node;
 struct slist_node
 {
@@ -348,6 +353,12 @@ struct slist_node
  * Singly linked lists are not circularly linked, in contrast to doubly linked
  * lists; we just set head.next to NULL if empty.  This doesn't incur any
  * additional branches in the usual manipulations.
+ */
+/*
+ * 单链表表头。
+ *
+ * 跟双链表相反，单链表不是循环链表；我们将head.next设为NULL，表示链表为空。在一般的操作中，
+ * 这不会引起额外的分支。
  */
 typedef struct slist_head
 {
@@ -366,6 +377,18 @@ typedef struct slist_head
  * deleting or inserting adjacent list elements might misbehave; also, if
  * the user frees the current node's storage, continuing the iteration is
  * not safe.)
+ *
+ * NB: this wouldn't really need to be an extra struct, we could use an
+ * slist_node * directly. We prefer a separate type for consistency.
+ */
+/*
+ * 单链表迭代器。
+ *
+ * Used as state in 作为slist_foreach()中的状态使用。使用'cur'来获取迭代的当前元素。
+ *
+ * 除了删除迭代器的当前节点之外，允许在迭代的时候修改链表；如果迭代还要继续向前的话，
+ * 删除当前节点需要当心。（删除当前节点，并且删除或者插入相邻的元素可能会有误操作；另外，
+ * 如果使用者释放当前节点的内存，继续当前迭代也会变得不安全。）
  *
  * NB: this wouldn't really need to be an extra struct, we could use an
  * slist_node * directly. We prefer a separate type for consistency.
