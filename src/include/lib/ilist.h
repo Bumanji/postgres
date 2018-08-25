@@ -387,11 +387,11 @@ typedef struct slist_head
  * Used as state in 作为slist_foreach()中的状态使用。使用'cur'来获取迭代的当前元素。
  *
  * 除了删除迭代器的当前节点之外，允许在迭代的时候修改链表；如果迭代还要继续向前的话，
- * 删除当前节点需要当心。（删除当前节点，并且删除或者插入相邻的元素可能会有误操作；另外，
+ * 删除当前节点需要当心。（删除当前节点，并且删除或者插入相邻的元素可能引起未知错误；另外，
  * 如果使用者释放当前节点的内存，继续当前迭代也会变得不安全。）
  *
- * NB: this wouldn't really need to be an extra struct, we could use an
- * slist_node * directly. We prefer a separate type for consistency.
+ * 注意：这其实不需要一个额外的结构体，我们可以直接使用一个slist_node *。但为了一致性，
+ * 我们更倾向于使用一个独立的类型。
  */
 typedef struct slist_iter
 {
@@ -408,20 +408,30 @@ typedef struct slist_iter
  * node via slist_delete_current() (*not* slist_delete()).  Insertion or
  * deletion of nodes adjacent to the current node would misbehave.
  */
+/*
+ * 在进行迭代的时候，单链表迭代器允许执行一些修改。
+ *
+ * 作为slist_foreach_modify()中的状态使用。使用'cur'成员来获取迭代的当前元素。
+ *
+ * 在迭代进行时唯一允许的链表修改是使用slist_delete_current() (*不是* slist_delete())
+ * 删除当前节点。插入或删除与当前节点相邻的节点可能会引起未知错误。
+ */
 typedef struct slist_mutable_iter
 {
-	slist_node *cur;			/* current element */
-	slist_node *next;			/* next node we'll iterate to */
-	slist_node *prev;			/* prev node, for deletions */
+	slist_node *cur;			/* current element *//* 当前元素 */
+	slist_node *next;			/* next node we'll iterate to *//* 我们将要迭代到的下一个节点 */
+	slist_node *prev;			/* prev node, for deletions *//* 上一个节点，是用来删除当前节点的 */
 } slist_mutable_iter;
 
 
 /* Static initializers */
+/* 静态初始化器 */
 #define DLIST_STATIC_INIT(name) {{&(name).head, &(name).head}}
 #define SLIST_STATIC_INIT(name) {{NULL}}
 
 
 /* Prototypes for functions too big to be inline */
+/* 太长而不能内联的函数的原型 */
 
 /* Caution: this is O(n); consider using slist_delete_current() instead */
 extern void slist_delete(slist_head *head, slist_node *node);
