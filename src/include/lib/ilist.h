@@ -434,12 +434,19 @@ typedef struct slist_mutable_iter
 /* 太长而不能内联的函数的原型 */
 
 /* Caution: this is O(n); consider using slist_delete_current() instead */
+/* 注意：这个函数时间复杂度是O(n)；考虑使用slist_delete_current() */
 extern void slist_delete(slist_head *head, slist_node *node);
 
 #ifdef ILIST_DEBUG
 extern void dlist_check(dlist_head *head);
 extern void slist_check(slist_head *head);
 #else
+/*
+ * These seemingly useless casts to void are here to keep the compiler quiet
+ * about the argument being unused in many functions in a non-debug compile,
+ * in which functions the only point of passing the list head pointer is to be
+ * able to run these checks.
+ */
 /*
  * These seemingly useless casts to void are here to keep the compiler quiet
  * about the argument being unused in many functions in a non-debug compile,
