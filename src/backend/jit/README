@@ -1,27 +1,36 @@
 What is Just-in-Time Compilation?
+什么是及时编译？
 =================================
 
 Just-in-Time compilation (JIT) is the process of turning some form of
 interpreted program evaluation into a native program, and doing so at
 runtime.
+及时编译（JIT）是在运行时，将解释执行的程序翻译成本地程序的过程。
 
 For example, instead of using a facility that can evaluate arbitrary
 SQL expressions to evaluate an SQL predicate like WHERE a.col = 3, it
 is possible to generate a function than can be natively executed by
 the CPU that just handles that expression, yielding a speedup.
+举个例子，使用某个机制对SQL表达式，比如SQL逻辑判断WHERE a.col = 3进行计算，
+这时可以生成一个由CPU本地执行的函数，这个函数直接运行这个表达式，从而进行加速。
 
 That this is done at query execution time, possibly even only in cases
 where the relevant task is done a number of times, makes it JIT,
 rather than ahead-of-time (AOT). Given the way JIT compilation is used
 in PostgreSQL, the lines between interpretation, AOT and JIT are
 somewhat blurry.
+这样的行为发生在查询执行的时候，甚至可能只发生在相关的任务执行多次以后，所以称之为JIT，
+而不是预先编译（AOT）。鉴于PostgreSQL的这种JIT编译方式，解释执行、AOT以及JIT之间
+的界线有些模糊了。
 
 Note that the interpreted program turned into a native program does
 not necessarily have to be a program in the classical sense. E.g. it
 is highly beneficial to JIT compile tuple deforming into a native
 function just handling a specific type of table, despite tuple
 deforming not commonly being understood as a "program".
-
+注意解释执行的程序变成本地程序后，不会生成一个传统意义上的程序。例如，JIT将
+元组转换编译成处理某种特定类型表的本地函数，是非常有好处的。虽然元组转换这一
+行为并不能认为是一个“程序”。
 
 Why JIT?
 ========
