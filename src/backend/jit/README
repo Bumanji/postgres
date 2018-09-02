@@ -100,18 +100,26 @@ compiled with LLVM support and the shared library is installed), the task
 of JIT compiling an expression gets handed off to the shared library. This
 obviously requires that the function in jit.c is allowed to fail in case
 no JIT provider can be loaded.
+为了达到这个目的，需要执行JIT的代码（比如，表达式求值）调用jit.c中一个LLVM无关的外覆方法。
+如果提供JIT支持的共享库能被加载（比如，PostgreSQL编译时加入了LLVM支持并且安装了共享库），
+那么使用JIT编译表达式的任务，就交给共享库了。这显然需要如果没有JIT操作提供者可以加载的时候，
+jit.c中的函数允许失败。
 
 Which shared library is loaded is determined by the jit_provider GUC,
 defaulting to "llvmjit".
+jit_provider全局设置选项决定了加载哪个共享库，默认设置为"llvmjit"。
 
 Cloistering code performing JIT into a shared library unfortunately
 also means that code doing JIT compilation for various parts of code
 has to be located separately from the code doing so without
 JIT. E.g. the JIT version of execExprInterp.c is located in jit/llvm/
 rather than executor/.
-
+不幸的是将执行JIT的代码隔离到共享库中，也就意味着执行JIT编译的代码需要跟不执行JIT
+编译的代码分开放在不同的地方。比如，JIT版本的execExprInterp.c放在jit/llvm/而不是
+executor/目录下。
 
 JIT Context
+JIT上下文
 -----------
 
 For performance and convenience reasons it is useful to allow JITed
