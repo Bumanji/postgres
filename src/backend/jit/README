@@ -77,16 +77,21 @@ PostgreSQL默认使用LLVM进行JIT。选择LLVM是因为它是由多个大企�
 Clang由C生成。
 
 Shared Library Separation
+共享库隔离
 -------------------------
 
 To avoid the main PostgreSQL binary directly depending on LLVM, which
 would prevent LLVM support being independently installed by OS package
 managers, the LLVM dependent code is located in a shared library that
 is loaded on-demand.
+为了避免PostgreSQL的主要二进制代码直接依赖LLVM，这样会防止OS包管理器独自安装
+LLVM支持，LLVM依赖代码放到共享库中，按需加载。
 
 An additional benefit of doing so is that it is relatively easy to
 evaluate JIT compilation that does not use LLVM, by changing out the
 shared library used to provide JIT compilation.
+这样做还有一个额外的好处，这样可以通过替换提供JIT编译的共享库，来相对容易地进行
+没有使用LLVM的JIT编译。
 
 To achieve this, code intending to perform JIT (e.g. expression evaluation)
 calls an LLVM independent wrapper located in jit.c to do so. If the
