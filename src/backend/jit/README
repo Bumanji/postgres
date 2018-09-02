@@ -33,6 +33,7 @@ deforming not commonly being understood as a "program".
 行为并不能认为是一个“程序”。
 
 Why JIT?
+为什么使用JIT？
 ========
 
 Parts of PostgreSQL are commonly bottlenecked by comparatively small
@@ -44,6 +45,10 @@ unpredictable branches, and generally a high number of instructions
 for a given task. E.g. just evaluating an expression comparing a
 column in a database to an integer ends up needing several hundred
 cycles.
+PostgreSQL的一部分通常会因为相对一小段CPU敏感的代码而产生瓶颈。很多情况下是
+因为相关的代码需要非常通用（比如，处理安装了任意扩展，任意表中的任意SQL层级的
+表达式）。这经常会导致非常多的间接跳转和不可预测的分支，以及给定任务的一大堆指令
+。比如，仅仅是将数据库的列跟整型比较，就会需要几百个指令周期。
 
 By generating native code large numbers of indirect jumps can be
 removed by either making them into direct branches (e.g. replacing the
@@ -53,9 +58,13 @@ branch at compile time because the input is constant). Similarly a lot
 of branches can be entirely removed (e.g. by again evaluating the
 branch at compile time because the input is constant). The latter is
 particularly beneficial for removing branches during tuple deforming.
-
+通过生成本地代码，大量的间接跳转要么会被转为直接分支（比如，将对SQL运算符实现
+的间接调用，替换为对函数的直接调用），要么整体替换（比如，输入是常量时在编译期
+计算）。类似的，很多分支也可以整体移除（比如，也是输入是常量时在编译期计算）。后者
+在元组转换时移除分支特别有益处。
 
 How to JIT
+如何JIT
 ==========
 
 PostgreSQL, by default, uses LLVM to perform JIT. LLVM was chosen
@@ -63,7 +72,9 @@ because it is developed by several large corporations and therefore
 unlikely to be discontinued, because it has a license compatible with
 PostgreSQL, and because its IR can be generated from C using the Clang
 compiler.
-
+PostgreSQL默认使用LLVM进行JIT。选择LLVM是因为它是由多个大企业开发，所以不太
+可能中断，因为它有一个跟PostgreSQL兼容的开源许可证，并且还因为它的IR可以使用
+Clang由C生成。
 
 Shared Library Separation
 -------------------------
