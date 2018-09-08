@@ -1,15 +1,19 @@
 src/backend/access/transam/README
 
 The Transaction System
+事务系统
 ======================
 
 PostgreSQL's transaction system is a three-layer system.  The bottom layer
 implements low-level transactions and subtransactions, on top of which rests
 the mainloop's control code, which in turn implements user-visible
 transactions and savepoints.
+PostgreSQL的事务系统是一个三层系统。最下面一层实现了底层的事务和子事务，在此之上支撑了
+主循环的控制代码，接着在这个基础之上实现了用户可见的事务和保存点（savepoints）。
 
 The middle layer of code is called by postgres.c before and after the
 processing of each query, or after detecting an error:
+postgres.c中会在每个查询处理的前后，或检测到错误之后，调用中间一层的代码：
 
 		StartTransactionCommand
 		CommitTransactionCommand
@@ -18,6 +22,8 @@ processing of each query, or after detecting an error:
 Meanwhile, the user can alter the system's state by issuing the SQL commands
 BEGIN, COMMIT, ROLLBACK, SAVEPOINT, ROLLBACK TO or RELEASE.  The traffic cop
 redirects these calls to the toplevel routines
+同时，用户可以使用SQL命令BEGIN, COMMIT, ROLLBACK, SAVEPOINT, ROLLBACK TO或RELEASE
+来改变系统状态。调度系统（traffic cop）将这些命令分别重定向到最高层的例程。
 
 		BeginTransactionBlock
 		EndTransactionBlock
@@ -28,6 +34,7 @@ redirects these calls to the toplevel routines
 
 respectively.  Depending on the current state of the system, these functions
 call low level functions to activate the real transaction system:
+根据系统当前状态，这些函数会调用底层函数来激活实际的事务系统：
 
 		StartTransaction
 		CommitTransaction
@@ -47,9 +54,14 @@ some operations (usually in the system catalogs) to be seen by future
 operations in the same utility command.  (For example, in DefineRelation it is
 done after creating the heap so the pg_class row is visible, to be able to
 lock it.)
-
+另外，在一个事务中，调用CommandCounterIncrement来增加命令计数器，这样可以让以后的命令
+“看到”同一个事务中前面命令的效果。注意，这样的处理在一个事务块中的每个查询之后调用
+CommitTransactionCommand时自动做了，但一些工具函数也会自己做这样的操作来允许同一个工具
+命令中前面的操作看到当前操作（通常在系统目录中）。（比如，DefineRelation中，在创建堆之后
+增加命令计数器，会让相应的pg_class行变为可见，这样可以对其进行加锁。）
 
 For example, consider the following sequence of user commands:
+比如，考虑用户的如下一系列命令：
 
 1)		BEGIN
 2)		SELECT * FROM foo
@@ -58,6 +70,7 @@ For example, consider the following sequence of user commands:
 
 In the main processing loop, this results in the following function call
 sequence:
+在主处理循环中，上述命令最终会变成以下的函数调用序列：
 
      /  StartTransactionCommand;
     /       StartTransaction;
