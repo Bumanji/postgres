@@ -14,6 +14,22 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * xact.c
+ *	  最高层级事务系统支持函数
+ *
+ * 参见src/backend/access/transam/README获取更多信息。
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
+ * IDENTIFICATION
+ *	  src/backend/access/transam/xact.c
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #include "postgres.h"
 
@@ -69,6 +85,9 @@
 /*
  *	User-tweakable parameters
  */
+/*
+ *	用户可调整参数
+ */
 int			DefaultXactIsoLevel = XACT_READ_COMMITTED;
 int			XactIsoLevel;
 
@@ -119,14 +138,17 @@ int			MyXactFlags;
 /*
  *	transaction states - transaction state from server perspective
  */
+/*
+ *	事务状态 —— 从服务端角度看的事务状态
+ */
 typedef enum TransState
 {
-	TRANS_DEFAULT,				/* idle */
-	TRANS_START,				/* transaction starting */
-	TRANS_INPROGRESS,			/* inside a valid transaction */
-	TRANS_COMMIT,				/* commit in progress */
-	TRANS_ABORT,				/* abort in progress */
-	TRANS_PREPARE				/* prepare in progress */
+	TRANS_DEFAULT,				/* idle *//* 空闲 */
+	TRANS_START,				/* transaction starting *//* 事务开始 */
+	TRANS_INPROGRESS,			/* inside a valid transaction *//* 在一个有效事务中 */
+	TRANS_COMMIT,				/* commit in progress *//* 正在提交事务 */
+	TRANS_ABORT,				/* abort in progress *//* 正在中止事务 */
+	TRANS_PREPARE				/* prepare in progress *//* 正在准备事务 */
 } TransState;
 
 /*
@@ -134,6 +156,11 @@ typedef enum TransState
  *
  * Note: the subtransaction states are used only for non-topmost
  * transactions; the others appear only in the topmost transaction.
+ */
+/*
+ *	事务块状态 —— 客户端查询的事务状态
+ *
+ * 注意：子事务状态只在非最高层事务中使用；其他的状态只出现在最高层事务中。
  */
 typedef enum TBlockState
 {
