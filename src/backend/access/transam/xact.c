@@ -164,35 +164,38 @@ typedef enum TransState
  */
 typedef enum TBlockState
 {
-	/* not-in-transaction-block states */
-	TBLOCK_DEFAULT,				/* idle */
-	TBLOCK_STARTED,				/* running single-query transaction */
+	/* not-in-transaction-block states *//* 非事务块状态 */
+	TBLOCK_DEFAULT,				/* idle *//* 空闲 */
+	TBLOCK_STARTED,				/* running single-query transaction *//* 执行单条查询事务 */
 
-	/* transaction block states */
-	TBLOCK_BEGIN,				/* starting transaction block */
-	TBLOCK_INPROGRESS,			/* live transaction */
-	TBLOCK_IMPLICIT_INPROGRESS, /* live transaction after implicit BEGIN */
-	TBLOCK_PARALLEL_INPROGRESS, /* live transaction inside parallel worker */
-	TBLOCK_END,					/* COMMIT received */
-	TBLOCK_ABORT,				/* failed xact, awaiting ROLLBACK */
-	TBLOCK_ABORT_END,			/* failed xact, ROLLBACK received */
-	TBLOCK_ABORT_PENDING,		/* live xact, ROLLBACK received */
-	TBLOCK_PREPARE,				/* live xact, PREPARE received */
+	/* transaction block states *//* 事务块状态 */
+	TBLOCK_BEGIN,				/* starting transaction block *//* 开始事务块 */
+	TBLOCK_INPROGRESS,			/* live transaction *//* 活动事务 */
+	TBLOCK_IMPLICIT_INPROGRESS, /* live transaction after implicit BEGIN *//* 隐式BEGIN后的活动事务 */
+	TBLOCK_PARALLEL_INPROGRESS, /* live transaction inside parallel worker *//* 并行执行中的活动事务 */
+	TBLOCK_END,					/* COMMIT received *//* 收到COMMIT命令 */
+	TBLOCK_ABORT,				/* failed xact, awaiting ROLLBACK *//* 事务失败，等待ROLLBACK */
+	TBLOCK_ABORT_END,			/* failed xact, ROLLBACK received *//* 事务失败，收到ROLLBACK */
+	TBLOCK_ABORT_PENDING,		/* live xact, ROLLBACK received *//* 活动事务，收到ROLLBACK */
+	TBLOCK_PREPARE,				/* live xact, PREPARE received *//* 活动事务，收到PREPARE */
 
-	/* subtransaction states */
-	TBLOCK_SUBBEGIN,			/* starting a subtransaction */
-	TBLOCK_SUBINPROGRESS,		/* live subtransaction */
-	TBLOCK_SUBRELEASE,			/* RELEASE received */
-	TBLOCK_SUBCOMMIT,			/* COMMIT received while TBLOCK_SUBINPROGRESS */
-	TBLOCK_SUBABORT,			/* failed subxact, awaiting ROLLBACK */
-	TBLOCK_SUBABORT_END,		/* failed subxact, ROLLBACK received */
-	TBLOCK_SUBABORT_PENDING,	/* live subxact, ROLLBACK received */
-	TBLOCK_SUBRESTART,			/* live subxact, ROLLBACK TO received */
-	TBLOCK_SUBABORT_RESTART		/* failed subxact, ROLLBACK TO received */
+	/* subtransaction states *//* 子事务状态 */
+	TBLOCK_SUBBEGIN,			/* starting a subtransaction *//* 开始子事务 */
+	TBLOCK_SUBINPROGRESS,		/* live subtransaction *//* 活动子事务 */
+	TBLOCK_SUBRELEASE,			/* RELEASE received *//* 收到RELEASE */
+	TBLOCK_SUBCOMMIT,			/* COMMIT received while TBLOCK_SUBINPROGRESS *//* TBLOCK_SUBINPROGRESS状态时收到COMMIT */
+	TBLOCK_SUBABORT,			/* failed subxact, awaiting ROLLBACK *//* 子事务失败，等待ROLLBACK */
+	TBLOCK_SUBABORT_END,		/* failed subxact, ROLLBACK received *//* 子事务失败，收到ROLLBACK */
+	TBLOCK_SUBABORT_PENDING,	/* live subxact, ROLLBACK received *//* 活动子事务，收到ROLLBACK */
+	TBLOCK_SUBRESTART,			/* live subxact, ROLLBACK TO received *//* 活动子事务，收到OLLBACK TO */
+	TBLOCK_SUBABORT_RESTART		/* failed subxact, ROLLBACK TO received *//* 子事务失败，收到ROLLBACK TO */
 } TBlockState;
 
 /*
  *	transaction state structure
+ */
+/*
+ *	事务状态结构体
  */
 typedef struct TransactionStateData
 {
