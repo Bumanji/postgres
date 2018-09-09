@@ -128,19 +128,14 @@ int			synchronous_commit = SYNCHRONOUS_COMMIT_ON;
  * 不管怎样，在并行工作者进程中GetTopTransactionId()和TransactionIdIsCurrentTransactionId()
  * 需要返回同样的结果，跟在用户的后台进程中一样。所以，需要一些额外的标注。
  *
- * XactTopTransactionId stores the XID of our toplevel transaction, which
- * will be the same as TopTransactionState.transactionId in an ordinary
- * backend; but in a parallel backend, which does not have the entire
- * transaction state, it will instead be copied from the backend that started
- * the parallel operation.
+ * XactTopTransactionId保存我们最高层事务的XID，跟普通后台进程中的TopTransactionState.transactionId
+ * 一样；但是在一个不会保存整体事务状态的并行后台进程中，XactTopTransactionId会从启动并行操作的后台进程中
+ * 复制。
  *
- * nParallelCurrentXids will be 0 and ParallelCurrentXids NULL in an ordinary
- * backend, but in a parallel backend, nParallelCurrentXids will contain the
- * number of XIDs that need to be considered current, and ParallelCurrentXids
- * will contain the XIDs themselves.  This includes all XIDs that were current
- * or sub-committed in the parent at the time the parallel operation began.
- * The XIDs are stored sorted in numerical order (not logical order) to make
- * lookups as fast as possible.
+ * 在一个普通进程中nParallelCurrentXids为0且ParallelCurrentXids为NULL，但是在一个并行后台进程中，
+ * nParallelCurrentXids包含当前需要考虑的XID的数量，ParallelCurrentXids为这些XID自身。ParallelCurrentXids
+ * 包含了所有当前或并行操作开始时的子提交的XID。XID存储时按数值排序（而不是逻辑顺序），这样可以使得
+ * 查找更迅速。
  */
 
 TransactionId XactTopTransactionId = InvalidTransactionId;
