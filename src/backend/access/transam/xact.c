@@ -122,6 +122,27 @@ int			synchronous_commit = SYNCHRONOUS_COMMIT_ON;
  * The XIDs are stored sorted in numerical order (not logical order) to make
  * lookups as fast as possible.
  */
+/*
+ * 当作为一个并行工作者进程运行时，我只将一个TransactionStateData放到并行工作者进程的
+ * 状态栈中，那么那里的XID就会代表的是初始化并行执行的后台进程中*最里面*的当前活动子事务。
+ * 不管怎样，在并行工作者进程中GetTopTransactionId()和TransactionIdIsCurrentTransactionId()
+ * 需要返回同样的结果，跟在用户的后台进程中一样。所以，需要一些额外的标注。
+ *
+ * XactTopTransactionId stores the XID of our toplevel transaction, which
+ * will be the same as TopTransactionState.transactionId in an ordinary
+ * backend; but in a parallel backend, which does not have the entire
+ * transaction state, it will instead be copied from the backend that started
+ * the parallel operation.
+ *
+ * nParallelCurrentXids will be 0 and ParallelCurrentXids NULL in an ordinary
+ * backend, but in a parallel backend, nParallelCurrentXids will contain the
+ * number of XIDs that need to be considered current, and ParallelCurrentXids
+ * will contain the XIDs themselves.  This includes all XIDs that were current
+ * or sub-committed in the parent at the time the parallel operation began.
+ * The XIDs are stored sorted in numerical order (not logical order) to make
+ * lookups as fast as possible.
+ */
+
 TransactionId XactTopTransactionId = InvalidTransactionId;
 int			nParallelCurrentXids = 0;
 TransactionId *ParallelCurrentXids;
