@@ -215,9 +215,9 @@ typedef enum TBlockState
  */
 typedef struct TransactionStateData
 {
-	TransactionId transactionId;	/* my XID, or Invalid if none */
-	SubTransactionId subTransactionId;	/* my subxact ID */
-	char	   *name;			/* savepoint name, if any */
+	TransactionId transactionId;	/* my XID, or Invalid if none *//* 我的事务ID，如果没有则无效 */
+	SubTransactionId subTransactionId;	/* my subxact ID *//* 我的子事务的ID */
+	char	   *name;			/* savepoint name, if any *//* 保存点的名称，如果有的话 */
 	int			savepointLevel; /* savepoint level */
 	TransState	state;			/* low-level state */
 	TBlockState blockState;		/* high-level state */

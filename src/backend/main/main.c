@@ -18,6 +18,25 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * main.c
+ *	  postgres可执行程序的main()函数桩例程。
+ *
+ * 这个桩例程包含了任何postgres化身（postmaster、后台单例进程、单例启动进程，或者
+ * postmaster的一个单独的子进程）的核心启动任务，然后转发到相应的postgres化身的FooMain()
+ * 例程中。
+ *
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
+ * IDENTIFICATION
+ *	  src/backend/main/main.c
+ *
+ *-------------------------------------------------------------------------
+ */
 #include "postgres.h"
 
 #include <unistd.h>
@@ -56,6 +75,9 @@ static void check_root(const char *progname);
 /*
  * Any Postgres server process begins execution here.
  */
+/*
+ * 任何Postgres服务端进程都在这里开始执行。
+ */
 int
 main(int argc, char *argv[])
 {
@@ -65,6 +87,10 @@ main(int argc, char *argv[])
 	 * If supported on the current platform, set up a handler to be called if
 	 * the backend/postmaster crashes with a fatal signal or exception.
 	 */
+	/*
+	 * 如果当前平台支持的话，设置一个处理器，用来在后台进程/postmaster因为收到致命信号或
+	 * 发生异常而崩溃的时候调用。
+	 */
 #if defined(WIN32) && defined(HAVE_MINIDUMP_TYPE)
 	pgwin32_install_crashdump_handler();
 #endif
@@ -73,6 +99,9 @@ main(int argc, char *argv[])
 
 	/*
 	 * Platform-specific startup hacks
+	 */
+	/*
+	 * 平台相关的启动技巧
 	 */
 	startup_hacks(progname);
 
