@@ -16,6 +16,23 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * tupdesc.c
+ *	  POSTGRES元组描述符支持代码
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
+ * IDENTIFICATION
+ *	  src/backend/access/common/tupdesc.c
+ *
+ * 注意：
+ *	  某些执行器工具代码，例如"ExecTypeFromTL"应该移到这里来。
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #include "postgres.h"
 

@@ -45,6 +45,52 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * initdb --- 初始化PostgreSQL
+ *
+ * initdb创建（初始化）一个PostgreSQL数据库集群（站点，实例，安装，或是其他的名称）。
+ * 一个数据库集群就是指同一个服务器管理的所有PostgreSQL数据库的集合。
+ *
+ * To create the database cluster, we create the directory that contains
+ * all its data, create the files that hold the global tables, create
+ * a few other control files for it, and create three databases: the
+ * template databases "template0" and "template1", and a default user
+ * database "postgres".
+ *
+ * The template databases are ordinary PostgreSQL databases.  template0
+ * is never supposed to change after initdb, whereas template1 can be
+ * changed to add site-local standard data.  Either one can be copied
+ * to produce a new database.
+ *
+ * For largely-historical reasons, the template1 database is the one built
+ * by the basic bootstrap process.  After it is complete, template0 and
+ * the default database, postgres, are made just by copying template1.
+ *
+ * To create template1, we run the postgres (backend) program in bootstrap
+ * mode and feed it data from the postgres.bki library file.  After this
+ * initial bootstrap phase, some additional stuff is created by normal
+ * SQL commands fed to a standalone backend.  Some of those commands are
+ * just embedded into this program (yeah, it's ugly), but larger chunks
+ * are taken from script files.
+ *
+ *
+ * Note:
+ *	 The program has some memory leakage - it isn't worth cleaning it up.
+ *
+ * This is a C implementation of the previous shell script for setting up a
+ * PostgreSQL cluster location, and should be highly compatible with it.
+ * author of C translation: Andrew Dunstan	   mailto:andrew@dunslane.net
+ *
+ * This code is released under the terms of the PostgreSQL License.
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ * src/bin/initdb/initdb.c
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #include "postgres_fe.h"
 
