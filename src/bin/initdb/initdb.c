@@ -242,6 +242,15 @@ static char *authwarning = NULL;
  * but here it is more convenient to pass it as an environment variable
  * (no quoting to worry about).
  */
+/*
+ * 传给后台进程的选项
+ *
+ * 注意：我们使用-F (关闭fsync)选项运行后台进程，然后在最后执行一遍fsync。这比每个步骤
+ * 都执行一次fsync要快。
+ *
+ * 注意：在shell脚本版本中，我们还将PGDATA变量通过-D选项传入，但是在这里，通过环境变量
+ * 来传入更为方便(无需担心双引号)。
+ */
 static const char *boot_options = "-F";
 static const char *backend_options = "--single -F -O -j -c search_path=pg_catalog -c exit_on_error=true";
 
@@ -272,6 +281,7 @@ static const char *const subdirs[] = {
 
 
 /* path to 'initdb' binary directory */
+/* 'initdb'二进制文件所在目录的路径 */
 static char bin_path[MAXPGPATH];
 static char backend_exec[MAXPGPATH];
 
@@ -333,19 +343,22 @@ void		initialize_data_directory(void);
 /*
  * macros for running pipes to postgres
  */
+/*
+ * 与postgres进行管道通信的宏
+ */
 #define PG_CMD_DECL		char cmd[MAXPGPATH]; FILE *cmdfd
 
 #define PG_CMD_OPEN \
 do { \
 	cmdfd = popen_check(cmd, "w"); \
 	if (cmdfd == NULL) \
-		exit_nicely(); /* message already printed by popen_check */ \
+		exit_nicely(); /* message already printed by popen_check *//* 消息已通过popen_check打印出来 */ \
 } while (0)
 
 #define PG_CMD_CLOSE \
 do { \
 	if (pclose_check(cmdfd)) \
-		exit_nicely(); /* message already printed by pclose_check */ \
+		exit_nicely(); /* message already printed by pclose_check *//* 消息已通过pclose_check打印出来 */ \
 } while (0)
 
 #define PG_CMD_PUTS(line) \
@@ -375,6 +388,9 @@ do { \
 /*
  * Escape single quotes and backslashes, suitably for insertions into
  * configuration files or SQL E'' strings.
+ */
+/*
+ * 转义单引号和斜杠，适用于配置文件或者SQL E''字符串。
  */
 static char *
 escape_quotes(const char *src)
