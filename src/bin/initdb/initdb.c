@@ -52,35 +52,26 @@
  * initdb创建（初始化）一个PostgreSQL数据库集群（站点，实例，安装，或是其他的名称）。
  * 一个数据库集群就是指同一个服务器管理的所有PostgreSQL数据库的集合。
  *
- * To create the database cluster, we create the directory that contains
- * all its data, create the files that hold the global tables, create
- * a few other control files for it, and create three databases: the
- * template databases "template0" and "template1", and a default user
- * database "postgres".
+ * 为了创建数据库集群，我们需要创建保护所有数据的目录，创建存储全局表的文件，创建其他
+ * 的一些控制文件，并且还要创建3个数据库：模板数据库"template0"和"template1"，以及
+ * 一个默认的用户数据库"postgres"。
  *
- * The template databases are ordinary PostgreSQL databases.  template0
- * is never supposed to change after initdb, whereas template1 can be
- * changed to add site-local standard data.  Either one can be copied
- * to produce a new database.
+ * 模板数据库是普通的PostgreSQL数据库。执行完initdb命令后，template0数据库就不会再变，
+ * 而template1可以变更，用来增加本站点标准的数据。两者都可以用来复制生成一个新的数据库。
  *
- * For largely-historical reasons, the template1 database is the one built
- * by the basic bootstrap process.  After it is complete, template0 and
- * the default database, postgres, are made just by copying template1.
+ * 很大程度上因为历史原因，template1数据库在基本的引导过程中创建。在这之后，template0
+ * 和默认的数据库postgres，只不过是通过复制template1数据库来创建的。
  *
- * To create template1, we run the postgres (backend) program in bootstrap
- * mode and feed it data from the postgres.bki library file.  After this
- * initial bootstrap phase, some additional stuff is created by normal
- * SQL commands fed to a standalone backend.  Some of those commands are
- * just embedded into this program (yeah, it's ugly), but larger chunks
- * are taken from script files.
+ * 我们以引导模式运行postgres(后台)程序并且通过postgres.bki库文件加载数据，来创建template1。
+ * 初始化引导阶段过后，通过在单例后台进程运行普通的SQL命令来完成一些额外的工作。一些命令是直接
+ * 写在这个程序里的（是的，这不好），但更大段的命令是从脚本文件里取的。
  *
  *
- * Note:
- *	 The program has some memory leakage - it isn't worth cleaning it up.
+ * 注意：
+ *	 这个程序有一些内存泄露 - 没必要清理。
  *
- * This is a C implementation of the previous shell script for setting up a
- * PostgreSQL cluster location, and should be highly compatible with it.
- * author of C translation: Andrew Dunstan	   mailto:andrew@dunslane.net
+ * 这是前一版用来设置PostgreSQL集群的shell脚本的C语言实现，并且应该跟前一版高度兼容。
+ * C代码的作者: Andrew Dunstan	   mailto:andrew@dunslane.net
  *
  * This code is released under the terms of the PostgreSQL License.
  *
@@ -107,7 +98,7 @@
 
 #include "access/xlog_internal.h"
 #include "catalog/pg_authid_d.h"
-#include "catalog/pg_class_d.h" /* pgrminclude ignore */
+#include "catalog/pg_class_d.h" /* pgrminclude ignore */ /* 忽略pgrminclude */
 #include "catalog/pg_collation_d.h"
 #include "common/file_perm.h"
 #include "common/file_utils.h"
@@ -121,6 +112,7 @@
 
 
 /* Ideally this would be in a .h file, but it hardly seems worth the trouble */
+/* 理想状态下，下面这个声明应该放在一个.h文件里，但看上去并不值得费那点事 */
 extern const char *select_default_timezone(const char *share_path);
 
 static const char *const auth_methods_host[] = {
@@ -162,9 +154,13 @@ static const char *const auth_methods_local[] = {
 /*
  * these values are passed in by makefile defines
  */
+/*
+ * 这些值会通过makefile定义传过来
+ */
 static char *share_path = NULL;
 
 /* values to be obtained from arguments */
+/* 从命令行参数获取这些值 */
 static char *pg_data = NULL;
 static char *encoding = NULL;
 static char *locale = NULL;
@@ -193,6 +189,7 @@ static int	wal_segment_size_mb;
 
 
 /* internal vars */
+/* 内部变量 */
 static const char *progname;
 static int	encodingid;
 static char *bki_file;
@@ -217,12 +214,16 @@ static int	output_errno = 0;
 static char *pgdata_native;
 
 /* defaults */
+/* 默认值 */
 static int	n_connections = 10;
 static int	n_buffers = 50;
 static char *dynamic_shared_memory_type = NULL;
 
 /*
  * Warning messages for authentication methods
+ */
+/*
+ * 认证方法的警告信息
  */
 #define AUTHTRUST_WARNING \
 "# CAUTION: Configuring the system for local \"trust\" authentication\n" \
