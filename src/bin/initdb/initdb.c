@@ -414,6 +414,12 @@ escape_quotes(const char *src)
  * representation ("\042").  We always wrap the value in double
  * quotes, even if that isn't strictly necessary.
  */
+/*
+ * 转义插入到BKI的一个字段的值。在这里，我们首先用escape_quotes来转义
+ * 这个值（将会通过后台的scanstr()函数来反转），然后对双引号特殊处理，
+ * bootscanner.l只会接受双引号的八进制表示("\042")的数值形式。
+ * 我们总是将数值包含在双引号中，甚至不是非常严格的。
+ */
 static char *
 escape_quotes_bki(const char *src)
 {
@@ -424,6 +430,7 @@ escape_quotes_bki(const char *src)
 	int			nquotes = 0;
 
 	/* count double quotes in data */
+	/* 计算数值中的双引号 */
 	datap = data;
 	while ((datap = strchr(datap, '"')) != NULL)
 	{
@@ -458,6 +465,11 @@ escape_quotes_bki(const char *src)
  * This does most of what sed was used for in the shell script, but
  * doesn't need any regexp stuff.
  */
+/*
+ * 将一行一行字符串构成的数组复制一份，每一行中第一次出现的标记替换为replacement。
+ *
+ * 这个函数做了shell脚本中sed的大部分操作，但不需要任何正则表达式。
+ */
 static char **
 replace_token(char **lines, const char *token, const char *replacement)
 {
@@ -484,6 +496,7 @@ replace_token(char **lines, const char *token, const char *replacement)
 		int			pre;
 
 		/* just copy pointer if NULL or no change needed */
+		/* 如果为NULL或不需要变更，则只复制指针 */
 		if (lines[i] == NULL || (where = strstr(lines[i], token)) == NULL)
 		{
 			result[i] = lines[i];
@@ -491,6 +504,7 @@ replace_token(char **lines, const char *token, const char *replacement)
 		}
 
 		/* if we get here a change is needed - set up new line */
+		/* 如果我们到这里的话，说明需要变更 - 设置新的一行 */
 
 		newline = (char *) pg_malloc(strlen(lines[i]) + diff + 1);
 
