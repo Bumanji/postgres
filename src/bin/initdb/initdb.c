@@ -3159,9 +3159,9 @@ main(int argc, char *argv[])
 		{"version", no_argument, NULL, 'V'},
 		{"debug", no_argument, NULL, 'd'},
 		{"show", no_argument, NULL, 's'},
-		{"noclean", no_argument, NULL, 'n'},	/* for backwards compatibility */
+		{"noclean", no_argument, NULL, 'n'},	/* for backwards compatibility *//* 向后兼容 */
 		{"no-clean", no_argument, NULL, 'n'},
-		{"nosync", no_argument, NULL, 'N'}, /* for backwards compatibility */
+		{"nosync", no_argument, NULL, 'N'}, /* for backwards compatibility *//* 向后兼容 */
 		{"no-sync", no_argument, NULL, 'N'},
 		{"sync-only", no_argument, NULL, 'S'},
 		{"waldir", required_argument, NULL, 'X'},
@@ -3175,6 +3175,9 @@ main(int argc, char *argv[])
 	 * options with no short version return a low integer, the rest return
 	 * their short version value
 	 */
+	/*
+	 * 没有短版本的选项会返回一个小整数，其余的会返回短版本的值
+	 */
 	int			c;
 	int			option_index;
 	char	   *effective_user;
@@ -3186,6 +3189,11 @@ main(int argc, char *argv[])
 	 * in interactive usage (at least on most platforms).  This prevents
 	 * unexpected output ordering when, eg, output is redirected to a file.
 	 * POSIX says we must do this before any other usage of these files.
+	 */
+	/*
+	 * 确保标准输出和标准错误的缓冲行为与交互式使用方式匹配（至少在大部分平台上）。这可以防止
+	 * 输出没有按照预期的顺序，比如在重定向到一个文件的时候。POSIX告诉我们必须在使用这些文件
+	 * 之前做这些。
 	 */
 	setvbuf(stdout, NULL, PG_IOLBF, 0);
 	setvbuf(stderr, NULL, _IONBF, 0);
@@ -3208,6 +3216,7 @@ main(int argc, char *argv[])
 	}
 
 	/* process command-line options */
+	/* 处理命令行选项 */
 
 	while ((c = getopt_long(argc, argv, "dD:E:kL:nNU:WA:sST:X:g", long_options, &option_index)) != -1)
 	{
