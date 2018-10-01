@@ -3244,6 +3244,10 @@ main(int argc, char *argv[])
 				 * Mirrored, when peer is specified, use ident for TCP/IP
 				 * connections.
 				 */
+				/*
+				 * 当指定ident时，使用peer进行本地连接。
+				 * 反之，当指定peer时，使用ident进行TCP/IP连接。
+				 */
 				if (strcmp(authmethodhost, "ident") == 0)
 					authmethodlocal = "peer";
 				else if (strcmp(authmethodlocal, "peer") == 0)
@@ -3331,6 +3335,7 @@ main(int argc, char *argv[])
 				break;
 			default:
 				/* getopt_long already emitted a complaint */
+				/* getopt_long已经发出了出错提示 */
 				fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
 						progname);
 				exit(1);
@@ -3341,6 +3346,9 @@ main(int argc, char *argv[])
 	/*
 	 * Non-option argument specifies data directory as long as it wasn't
 	 * already specified with -D / --pgdata
+	 */
+	/*
+	 * 如果数据目录没有通过-D / --pgdata选项参数指定的话，则将命令行最后没有参数的目录指定为数据目录。
 	 */
 	if (optind < argc && !pg_data)
 	{
@@ -3358,11 +3366,13 @@ main(int argc, char *argv[])
 	}
 
 	/* If we only need to fsync, just do it and exit */
+	/* 如果我们只需要fsync，执行然后退出 */
 	if (sync_only)
 	{
 		setup_pgdata();
 
 		/* must check that directory is readable */
+		/* 必须检测数据目录是可读的 */
 		if (pg_check_dir(pg_data) <= 0)
 		{
 			fprintf(stderr, _("%s: could not access directory \"%s\": %s\n"),
@@ -3392,6 +3402,7 @@ main(int argc, char *argv[])
 	check_need_password(authmethodlocal, authmethodhost);
 
 	/* set wal segment size */
+	/* 设置wal段的大小 */
 	if (str_wal_segment_size_mb == NULL)
 		wal_segment_size_mb = (DEFAULT_XLOG_SEG_SIZE) / (1024 * 1024);
 	else
@@ -3399,9 +3410,11 @@ main(int argc, char *argv[])
 		char	   *endptr;
 
 		/* check that the argument is a number */
+		/* 检测传入的参数是一个数字 */
 		wal_segment_size_mb = strtol(str_wal_segment_size_mb, &endptr, 10);
 
 		/* verify that wal segment size is valid */
+		/* 验证wal段大小是有效的 */
 		if (endptr == str_wal_segment_size_mb || *endptr != '\0')
 		{
 			fprintf(stderr,
