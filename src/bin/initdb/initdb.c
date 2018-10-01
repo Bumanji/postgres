@@ -2565,6 +2565,7 @@ setup_pgdata(void)
 		if (pgdata_get_env && strlen(pgdata_get_env))
 		{
 			/* PGDATA found */
+			/* 找到了PGDATA环境变量 */
 			pg_data = pg_strdup(pgdata_get_env);
 		}
 		else
@@ -2587,6 +2588,12 @@ setup_pgdata(void)
 	 * line to avoid dumb quoting problems on Windows, and we would especially
 	 * need quotes otherwise on Windows because paths there are most likely to
 	 * have embedded spaces.
+	 */
+	/*
+	 * 我们不得不为postgres设置PGDATA环境变量，而不是通过命令行来传给postgres，这么做
+	 * 是为了避免Windows下的哑引用问题。在Windows下我们还需特别地将这个环境变量用双引号
+	 * 引用起来，因为Windows平台下路径很可能会包含空格。（译注：看代码，windows下数据目录
+	 * 并没有双引号）
 	 */
 	pgdata_set_env = psprintf("PGDATA=%s", pg_data);
 	putenv(pgdata_set_env);
