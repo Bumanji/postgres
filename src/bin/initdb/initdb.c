@@ -767,6 +767,9 @@ encodingid_to_string(int enc)
 /*
  * get the encoding id for a given encoding name
  */
+/*
+ * 通过给定的编码名称获取编码ID
+ */
 static int
 get_encoding_id(const char *encoding_name)
 {
@@ -878,6 +881,9 @@ find_matching_ts_config(const char *lc_type)
 /*
  * set name of given input file variable under data directory
  */
+/*
+ * 将给定的文件名设置到数据目录下
+ */
 static void
 set_input(char **dest, const char *filename)
 {
@@ -886,6 +892,9 @@ set_input(char **dest, const char *filename)
 
 /*
  * check that given input file exists
+ */
+/*
+ * 确认给定的输入文件存在
  */
 static void
 check_input(char *path)
@@ -2041,6 +2050,9 @@ setup_privileges(FILE *cmdfd)
  * extract the strange version of version required for information schema
  * (09.08.0007abc)
  */
+/*
+ * 展开独特的版本
+ */
 static void
 set_info_version(void)
 {
@@ -2370,6 +2382,11 @@ check_locale_name(int category, const char *locale, char **canonname)
  *
  * this should match the similar check in the backend createdb() function
  */
+/*
+ * 检查选择的编码是否符合区域设置所需要的编码
+ *
+ * 这跟后台进程createdb()函数的检查类似
+ */
 static bool
 check_locale_encoding(const char *locale, int user_enc)
 {
@@ -2378,6 +2395,7 @@ check_locale_encoding(const char *locale, int user_enc)
 	locale_enc = pg_get_encoding_from_locale(locale, true);
 
 	/* See notes in createdb() to understand these tests */
+	/* 参照createdb()的备注来理解这些测试 */
 	if (!(locale_enc == user_enc ||
 		  locale_enc == PG_SQL_ASCII ||
 		  locale_enc == -1 ||
@@ -2406,12 +2424,18 @@ check_locale_encoding(const char *locale, int user_enc)
  *
  * assumes we have called setlocale(LC_ALL, "") -- see set_pglocale_pgservice
  */
+/*
+ * 设置本地化变量
+ *
+ * 假设我们已经调用了setlocale(LC_ALL, "") -- 参见set_pglocale_pgservice
+ */
 static void
 setlocales(void)
 {
 	char	   *canonname;
 
 	/* set empty lc_* values to locale config if set */
+	/* 如果设置了locale，则将空的lc_*值设置为locale */
 
 	if (locale)
 	{
@@ -2433,6 +2457,9 @@ setlocales(void)
 	 * canonicalize locale names, and obtain any missing values from our
 	 * current environment
 	 */
+	/*
+	 * 正规化本地化名称，并且从当前的环境中获取缺失的值
+	 */
 
 	check_locale_name(LC_CTYPE, lc_ctype, &canonname);
 	lc_ctype = canonname;
@@ -2449,6 +2476,7 @@ setlocales(void)
 	lc_messages = canonname;
 #else
 	/* when LC_MESSAGES is not available, use the LC_CTYPE setting */
+	/* 当LC_MESSAGES无效的时候，使用LC_CTYPE设置 */
 	check_locale_name(LC_CTYPE, lc_messages, &canonname);
 	lc_messages = canonname;
 #endif
@@ -2685,6 +2713,7 @@ setup_locale_encoding(void)
 		if (ctype_enc == -1)
 		{
 			/* Couldn't recognize the locale's codeset */
+			/* 无法识别本地化的字符集 */
 			fprintf(stderr, _("%s: could not find suitable encoding for locale \"%s\"\n"),
 					progname, lc_ctype);
 			fprintf(stderr, _("Rerun %s with the -E option.\n"), progname);
@@ -2698,6 +2727,10 @@ setup_locale_encoding(void)
 			 * We recognized it, but it's not a legal server encoding. On
 			 * Windows, UTF-8 works with any locale, so we can fall back to
 			 * UTF-8.
+			 */
+			/*
+			 * 我们识别了字符编码，但不是一个合法的服务端编码。在Windows平台上，UTF-8在任何区域都适用，
+			 * 所以我们可以设置为UTF-8。
 			 */
 #ifdef WIN32
 			encodingid = PG_UTF8;
@@ -2728,7 +2761,7 @@ setup_locale_encoding(void)
 
 	if (!check_locale_encoding(lc_ctype, encodingid) ||
 		!check_locale_encoding(lc_collate, encodingid))
-		exit(1);				/* check_locale_encoding printed the error */
+		exit(1);				/* check_locale_encoding printed the error *//* check_locale_encoding打印了错误消息 */
 
 }
 
