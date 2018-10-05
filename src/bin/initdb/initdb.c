@@ -2887,6 +2887,7 @@ create_data_directory(void)
 	{
 		case 0:
 			/* PGDATA not there, must create it */
+			/* PGDATA不在，则创建 */
 			printf(_("creating directory %s ... "),
 				   pg_data);
 			fflush(stdout);
@@ -2905,6 +2906,7 @@ create_data_directory(void)
 
 		case 1:
 			/* Present but empty, fix permissions and use it */
+			/* 存在但为空，则设置权限后使用 */
 			printf(_("fixing permissions on existing directory %s ... "),
 				   pg_data);
 			fflush(stdout);
@@ -2925,6 +2927,7 @@ create_data_directory(void)
 		case 3:
 		case 4:
 			/* Present and not empty */
+			/* 存在且不为空 */
 			fprintf(stderr,
 					_("%s: directory \"%s\" exists but is not empty\n"),
 					progname, pg_data);
@@ -2936,10 +2939,11 @@ create_data_directory(void)
 						  "the directory \"%s\" or run %s\n"
 						  "with an argument other than \"%s\".\n"),
 						pg_data, progname, pg_data);
-			exit(1);			/* no further message needed */
+			exit(1);			/* no further message needed *//* 不再需要更多的消息 */
 
 		default:
 			/* Trouble accessing directory */
+			/* 访问目录出错 */
 			fprintf(stderr, _("%s: could not access directory \"%s\": %s\n"),
 					progname, pg_data, strerror(errno));
 			exit_nicely();
@@ -2948,12 +2952,14 @@ create_data_directory(void)
 
 
 /* Create WAL directory, and symlink if required */
+/* 创建WAL目录，如果需要则创建符号链接 */
 void
 create_xlog_or_symlink(void)
 {
 	char	   *subdirloc;
 
 	/* form name of the place for the subdirectory or symlink */
+	/* 获取wal子目录或符号链接的名称 */
 	subdirloc = psprintf("%s/pg_wal", pg_data);
 
 	if (xlog_dir)
