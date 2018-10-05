@@ -3093,6 +3093,11 @@ initialize_data_directory(void)
 	 * then updated if -g is passed in by calling SetDataDirectoryCreatePerm()
 	 * when parsing our options (see above).
 	 */
+	/*
+	 * 根据需要的PGDATA目录权限设置文件mask值。pg_mode_mask，以及相关的如pg_dir_create_mode，
+	 * 默认设置为所有者可访问，如果解析命令行选项时发现设置了-g，则可以通过调用SetDataDirectoryCreatePerm()
+	 * 函数进行更新（参见上面选项解析）。
+	 */
 	umask(pg_mode_mask);
 
 	create_data_directory();
@@ -3100,6 +3105,7 @@ initialize_data_directory(void)
 	create_xlog_or_symlink();
 
 	/* Create required subdirectories (other than pg_wal) */
+	/* 创建所需的子目录（除了pg_wal目录之外） */
 	printf(_("creating subdirectories ... "));
 	fflush(stdout);
 
