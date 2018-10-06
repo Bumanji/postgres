@@ -1747,6 +1747,9 @@ setup_depend(FILE *cmdfd)
 /*
  * set up system views
  */
+/*
+ * 设置系统视图
+ */
 static void
 setup_sysviews(FILE *cmdfd)
 {
@@ -1768,6 +1771,9 @@ setup_sysviews(FILE *cmdfd)
 
 /*
  * load description data
+ */
+/*
+ * 加载描述数据
  */
 static void
 setup_description(FILE *cmdfd)
@@ -1800,6 +1806,7 @@ setup_description(FILE *cmdfd)
 				"   WHERE c.relname = t.classname;\n\n");
 
 	/* Create default descriptions for operator implementation functions */
+	/* 创建运算符实现函数的默认描述 */
 	PG_CMD_PUTS("WITH funcdescs AS ( "
 				"SELECT p.oid as p_oid, o.oid as o_oid, oprname "
 				"FROM pg_proc p JOIN pg_operator o ON oprcode = p.oid ) "
@@ -1816,6 +1823,10 @@ setup_description(FILE *cmdfd)
 	/*
 	 * Even though the tables are temp, drop them explicitly so they don't get
 	 * copied into template0/postgres databases.
+	 */
+	/*
+	 * 尽管这些表都是临时表，还是要将它们显式地删除，这样它们就不会被复制到template0/postgres
+	 * 数据库中。
 	 */
 	PG_CMD_PUTS("DROP TABLE tmp_pg_description;\n\n");
 	PG_CMD_PUTS("DROP TABLE tmp_pg_shdescription;\n\n");
@@ -3119,6 +3130,10 @@ initialize_data_directory(void)
 		 * The parent directory already exists, so we only need mkdir() not
 		 * pg_mkdir_p() here, which avoids some failure modes; cf bug #13853.
 		 */
+		/*
+		 * 父目录已经存在，所以我们只需要在这里调用mkdir()，而不是调用pg_mkdir_p()，这样
+		 * 可以避免一些失败的文件模式；cf bug #13853。
+		 */
 		if (mkdir(path, pg_dir_create_mode) < 0)
 		{
 			fprintf(stderr, _("%s: could not create directory \"%s\": %s\n"),
@@ -3132,26 +3147,36 @@ initialize_data_directory(void)
 	check_ok();
 
 	/* Top level PG_VERSION is checked by bootstrapper, so make it first */
+	/* 最高一级的PG_VERSION会被启动器检查，所以需要最先设置 */
 	write_version_file(NULL);
 
 	/* Select suitable configuration settings */
+	/* 选择合适的配置设置 */
 	set_null_conf();
 	test_config_settings();
 
 	/* Now create all the text config files */
+	/* 现在创建所有的文本配置文件 */
 	setup_config();
 
 	/* Bootstrap template1 */
+	/* 启动template1数据库 */
 	bootstrap_template1();
 
 	/*
 	 * Make the per-database PG_VERSION for template1 only after init'ing it
+	 */
+	/*
+	 * 在初始化template1后，创建每个数据库都使用的PG_VERSION
 	 */
 	write_version_file("base/1");
 
 	/*
 	 * Create the stuff we don't need to use bootstrap mode for, using a
 	 * backend running in simple standalone mode.
+	 */
+	/*
+	 * 不需要使用bootstrap模式运行，使用运行在simple standalone模式下运行的后台进程即可创建
 	 */
 	fputs(_("performing post-bootstrap initialization ... "), stdout);
 	fflush(stdout);
@@ -3170,6 +3195,10 @@ initialize_data_directory(void)
 	/*
 	 * Note that no objects created after setup_depend() will be "pinned".
 	 * They are all droppable at the whim of the DBA.
+	 */
+	/*
+	 * 注意setup_depend()后创建的数据库对象并不是固定下来的。它们都可以
+	 * 被DBA一时兴起给删掉。
 	 */
 
 	setup_sysviews(cmdfd);
