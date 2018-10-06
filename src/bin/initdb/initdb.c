@@ -1856,6 +1856,9 @@ setup_collation(FILE *cmdfd)
 /*
  * load conversion functions
  */
+/*
+ * 加载转换函数
+ */
 static void
 setup_conversion(FILE *cmdfd)
 {

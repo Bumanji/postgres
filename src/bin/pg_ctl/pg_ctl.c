@@ -29,10 +29,11 @@
 #include "getopt_long.h"
 #include "utils/pidfile.h"
 
-#ifdef WIN32					/* on Unix, we don't need libpq */
+#ifdef WIN32					/* on Unix, we don't need libpq *//* 在Unix下，我们不需要libpq */
 #include "pqexpbuffer.h"
 #endif
 
+/* PID can be negative for standalone backend */
 /* PID can be negative for standalone backend */
 typedef long pgpid_t;
 

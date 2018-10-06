@@ -36,6 +36,42 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * heapam.c
+ *	  堆访问方法的代码
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
+ * IDENTIFICATION
+ *	  src/backend/access/heap/heapam.c
+ *
+ *
+ * 接口函数
+ *		relation_open	- 根据关系OID打开关系
+ *		relation_openrv - 根据RangeVar打开关系
+ *		relation_close	- 关闭关系
+ *		heap_open		- 根据关系OID打开堆关系
+ *		heap_openrv		- 根据RangeVar打开堆关系
+ *		heap_close		- (目前只是relation_close的一个宏)
+ *		heap_beginscan	- 开始关系扫描
+ *		heap_rescan		- 重启关系扫描
+ *		heap_endscan	- 结束关系扫描
+ *		heap_getnext	- 在扫描中检索下一个元组
+ *		heap_fetch		- 根据tid检索元组
+ *		heap_insert		- 将元组插入到关系中
+ *		heap_multi_insert - 将多个元组插入到一个关系中
+ *		heap_delete		- 从一个关系中删除一个元组
+ *		heap_update		- 将一个关系中的一个元组替换为另外一个元组
+ *		heap_sync		- 当没有WAL被写入时，同步堆
+ *
+ * 备注
+ *	  本文件包含heap_函数，实现了适用于所有POSTGRES关系的堆访问方法。
+ *
+ *-------------------------------------------------------------------------
+ */
 #include "postgres.h"
 
 #include "access/bufmask.h"
