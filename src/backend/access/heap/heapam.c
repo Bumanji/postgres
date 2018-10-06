@@ -116,6 +116,7 @@
 #include "executor/executor.h"
 
 /* GUC variable */
+/* GUC变量 */
 bool		synchronize_seqscans = true;
 
 
