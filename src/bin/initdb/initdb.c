@@ -1835,6 +1835,9 @@ setup_description(FILE *cmdfd)
 /*
  * populate pg_collation
  */
+/*
+ * 设置pg_collation
+ */
 static void
 setup_collation(FILE *cmdfd)
 {
