@@ -179,6 +179,13 @@ static bool ProjIndexIsUnchanged(Relation relation, HeapTuple oldtup, HeapTuple 
  * Don't look at lockstatus/updstatus directly!  Use get_mxact_status_for_lock
  * instead.
  */
+/*
+ * 每个元组锁模式都有一个对应的重量级锁，以及一个或两个对应的MultiXactStatuses（一个仅仅对元组加锁，
+ * 另外一个更新它们）。这个表格（以及下面的宏）可以帮助我们确定任意特定元组锁强度的重量级锁模式和
+ * MultiXactStatus的值。
+ *
+ * 不要直接使用lockstatus/updstatus！使用get_mxact_status_for_lock。
+ */
 static const struct
 {
 	LOCKMODE	hwlock;
