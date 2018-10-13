@@ -301,11 +301,6 @@ initscan(HeapScanDesc scan, ScanKey key, bool keep_startblock)
 	 * 如何都是不可见的。（当使用非MVCC快照的时候，并非如此。不过，我们无法保证在扫描开始后返回
 	 * 新增的元组，因为它们可能放入我们已经扫描过的页中。为了在使用非MVCC快照时保证一致的结果，
 	 * 调用者必须持有高层级的锁，用以确保我们关注的元组不会更改。）
-	 * (That is not true when using a non-MVCC snapshot.  However, we couldn't
-	 * guarantee to return tuples added after scan start anyway, since they
-	 * might go into pages we already scanned.  To guarantee consistent
-	 * results for a non-MVCC snapshot, the caller must hold some higher-level
-	 * lock that ensures the interesting tuple(s) won't change.)
 	 */
 	if (scan->rs_parallel != NULL)
 		scan->rs_nblocks = scan->rs_parallel->phs_nblocks;

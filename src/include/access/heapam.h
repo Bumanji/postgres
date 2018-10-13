@@ -11,6 +11,19 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * heapam.h
+ *	  POSTGRES堆访问方法定义。
+ *
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ * src/include/access/heapam.h
+ *
+ *-------------------------------------------------------------------------
+ */
 #ifndef HEAPAM_H
 #define HEAPAM_H
 
@@ -25,6 +38,7 @@
 
 
 /* "options" flag bits for heap_insert */
+/* heap_insert的“选项”标志比特位 */
 #define HEAP_INSERT_SKIP_WAL	0x0001
 #define HEAP_INSERT_SKIP_FSM	0x0002
 #define HEAP_INSERT_FROZEN		0x0004
@@ -35,6 +49,9 @@ typedef struct BulkInsertStateData *BulkInsertState;
 /*
  * Possible lock modes for a tuple.
  */
+/*
+ * 元组可能的锁模式。
+ */
 typedef enum LockTupleMode
 {
 	/* SELECT FOR KEY SHARE */
@@ -42,8 +59,10 @@ typedef enum LockTupleMode
 	/* SELECT FOR SHARE */
 	LockTupleShare,
 	/* SELECT FOR NO KEY UPDATE, and UPDATEs that don't modify key columns */
+	/* SELECT FOR NO KEY UPDATE, 以及不会修改key列的UPDATE*/
 	LockTupleNoKeyExclusive,
 	/* SELECT FOR UPDATE, UPDATEs that modify key columns, and DELETE */
+	/* SELECT FOR UPDATE, 修改key列的UPDATEs, and DELETE */
 	LockTupleExclusive
 } LockTupleMode;
 
