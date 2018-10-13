@@ -198,12 +198,12 @@ static const struct
 	{							/* LockTupleKeyShare */
 		AccessShareLock,
 		MultiXactStatusForKeyShare,
-		-1						/* KeyShare does not allow updating tuples */
+		-1						/* KeyShare does not allow updating tuples *//* KeyShare不允许更新元组 */
 	},
 	{							/* LockTupleShare */
 		RowShareLock,
 		MultiXactStatusForShare,
-		-1						/* Share does not allow updating tuples */
+		-1						/* Share does not allow updating tuples *//* Share不允许更新元组 */
 	},
 	{							/* LockTupleNoKeyExclusive */
 		ExclusiveLock,
@@ -218,6 +218,7 @@ static const struct
 };
 
 /* Get the LOCKMODE for a given MultiXactStatus */
+/* 根据MultiXactStatus获取锁模式LOCKMODE */
 #define LOCKMODE_from_mxstatus(status) \
 			(tupleLockExtraInfo[TUPLOCK_from_mxstatus((status))].hwlock)
 
@@ -225,6 +226,10 @@ static const struct
  * Acquire heavyweight locks on tuples, using a LockTupleMode strength value.
  * This is more readable than having every caller translate it to lock.h's
  * LOCKMODE.
+ */
+/*
+ * 使用LockTupleMode的值获取重量级锁。这比让每个调用者将其转换为lock.h中的LOCKMODE
+ * 更具有可读性。
  */
 #define LockTupleTuplock(rel, tup, mode) \
 	LockTuple((rel), (tup), tupleLockExtraInfo[mode].hwlock)
@@ -237,6 +242,9 @@ static const struct
  * This table maps tuple lock strength values for each particular
  * MultiXactStatus value.
  */
+/*
+ * 这个表格将元组的锁强度值映射为相应的MultiXactStatus值。
+ */
 static const int MultiXactStatusLock[MaxMultiXactStatus + 1] =
 {
 	LockTupleKeyShare,			/* ForKeyShare */
@@ -248,6 +256,7 @@ static const int MultiXactStatusLock[MaxMultiXactStatus + 1] =
 };
 
 /* Get the LockTupleMode for a given MultiXactStatus */
+/* 根据MultiXactStatus获取LockTupleMode */
 #define TUPLOCK_from_mxstatus(status) \
 			(MultiXactStatusLock[(status)])
 
@@ -255,9 +264,17 @@ static const int MultiXactStatusLock[MaxMultiXactStatus + 1] =
  *						 heap support routines
  * ----------------------------------------------------------------
  */
+/* ----------------------------------------------------------------
+ *						 堆支持例程
+ * ----------------------------------------------------------------
+ */
 
 /* ----------------
  *		initscan - scan code common to heap_beginscan and heap_rescan
+ * ----------------
+ */
+/* ----------------
+ *		initscan - heap_beginscan和heap_rescan公用的扫描代码
  * ----------------
  */
 static void
