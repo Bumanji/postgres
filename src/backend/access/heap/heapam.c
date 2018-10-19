@@ -396,13 +396,20 @@ initscan(HeapScanDesc scan, ScanKey key, bool keep_startblock)
  * startBlk is the page to start at
  * numBlks is number of pages to scan (InvalidBlockNumber means "all")
  */
+/*
+ * heap_setscanlimits - 限定heapscan的范围
+ *
+ * startBlk表示开始页
+ * numBlks表示扫描的页数(InvalidBlockNumber表示"所有")
+ */
 void
 heap_setscanlimits(HeapScanDesc scan, BlockNumber startBlk, BlockNumber numBlks)
 {
-	Assert(!scan->rs_inited);	/* else too late to change */
-	Assert(!scan->rs_syncscan); /* else rs_startblock is significant */
+	Assert(!scan->rs_inited);	/* else too late to change *//* 否则变更太迟了 */
+	Assert(!scan->rs_syncscan); /* else rs_startblock is significant *//* 否则rs_startblock很重要 */
 
 	/* Check startBlk is valid (but allow case of zero blocks...) */
+	/* 确保startBlk有效(但允许是0个数据块的情况...) */
 	Assert(startBlk == 0 || startBlk < scan->rs_nblocks);
 
 	scan->rs_startblock = startBlk;
