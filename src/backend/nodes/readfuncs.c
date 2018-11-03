@@ -17,10 +17,14 @@
  *	  never read executor state trees, either.
  *
  *	  Parse location fields are written out by outfuncs.c, but only for
- *	  possible debugging use.  When reading a location field, we discard
+ *	  debugging use.  When reading a location field, we normally discard
  *	  the stored value and set the location field to -1 (ie, "unknown").
  *	  This is because nodes coming from a stored rule should not be thought
  *	  to have a known location in the current query's text.
+ *	  However, if restore_location_fields is true, we do restore location
+ *	  fields from the string.  This is currently intended only for use by the
+ *	  WRITE_READ_PARSE_PLAN_TREES test code, which doesn't want to cause
+ *	  any change in the node contents.
  *
  *-------------------------------------------------------------------------
  */
@@ -51,7 +55,7 @@
 
 /* And a few guys need only the pg_strtok support fields */
 #define READ_TEMP_LOCALS()	\
-	char	   *token;		\
+	const char *token;		\
 	int			length
 
 /* ... but most need both */
@@ -120,12 +124,19 @@
 	token = pg_strtok(&length);		/* get field value */ \
 	local_node->fldname = nullable_string(token, length)
 
-/* Read a parse location field (and throw away the value, per notes above) */
+/* Read a parse location field (and possibly throw away the value) */
+#ifdef WRITE_READ_PARSE_PLAN_TREES
+#define READ_LOCATION_FIELD(fldname) \
+	token = pg_strtok(&length);		/* skip :fldname */ \
+	token = pg_strtok(&length);		/* get field value */ \
+	local_node->fldname = restore_location_fields ? atoi(token) : -1
+#else
 #define READ_LOCATION_FIELD(fldname) \
 	token = pg_strtok(&length);		/* skip :fldname */ \
 	token = pg_strtok(&length);		/* get field value */ \
 	(void) token;				/* in case not used elsewhere */ \
 	local_node->fldname = -1	/* set field to "unknown" */
+#endif
 
 /* Read a Node field */
 #define READ_NODE_FIELD(fldname) \
@@ -269,7 +280,7 @@ _readQuery(void)
 	READ_NODE_FIELD(rowMarks);
 	READ_NODE_FIELD(setOperations);
 	READ_NODE_FIELD(constraintDeps);
-	/* withCheckOptions intentionally omitted, see comment in parsenodes.h */
+	READ_NODE_FIELD(withCheckOptions);
 	READ_LOCATION_FIELD(stmt_location);
 	READ_LOCATION_FIELD(stmt_len);
 
@@ -1350,6 +1361,7 @@ _readRangeTblEntry(void)
 		case RTE_RELATION:
 			READ_OID_FIELD(relid);
 			READ_CHAR_FIELD(relkind);
+			READ_INT_FIELD(rellockmode);
 			READ_NODE_FIELD(tablesample);
 			break;
 		case RTE_SUBQUERY:
@@ -1366,6 +1378,15 @@ _readRangeTblEntry(void)
 			break;
 		case RTE_TABLEFUNC:
 			READ_NODE_FIELD(tablefunc);
+			/* The RTE must have a copy of the column type info, if any */
+			if (local_node->tablefunc)
+			{
+				TableFunc  *tf = local_node->tablefunc;
+
+				local_node->coltypes = tf->coltypes;
+				local_node->coltypmods = tf->coltypmods;
+				local_node->colcollations = tf->colcollations;
+			}
 			break;
 		case RTE_VALUES:
 			READ_NODE_FIELD(values_lists);
@@ -1483,7 +1504,6 @@ _readPlannedStmt(void)
 	READ_NODE_FIELD(planTree);
 	READ_NODE_FIELD(rtable);
 	READ_NODE_FIELD(resultRelations);
-	READ_NODE_FIELD(nonleafResultRelations);
 	READ_NODE_FIELD(rootResultRelations);
 	READ_NODE_FIELD(subplans);
 	READ_BITMAPSET_FIELD(rewindPlanIDs);
@@ -1577,7 +1597,7 @@ _readModifyTable(void)
 	READ_ENUM_FIELD(operation, CmdType);
 	READ_BOOL_FIELD(canSetTag);
 	READ_UINT_FIELD(nominalRelation);
-	READ_NODE_FIELD(partitioned_rels);
+	READ_UINT_FIELD(rootRelation);
 	READ_BOOL_FIELD(partColsUpdated);
 	READ_NODE_FIELD(resultRelations);
 	READ_INT_FIELD(resultRelIndex);
@@ -1611,7 +1631,6 @@ _readAppend(void)
 
 	READ_NODE_FIELD(appendplans);
 	READ_INT_FIELD(first_partial_plan);
-	READ_NODE_FIELD(partitioned_rels);
 	READ_NODE_FIELD(part_prune_info);
 
 	READ_DONE();
@@ -1627,7 +1646,6 @@ _readMergeAppend(void)
 
 	ReadCommonPlan(&local_node->plan);
 
-	READ_NODE_FIELD(partitioned_rels);
 	READ_NODE_FIELD(mergeplans);
 	READ_INT_FIELD(numCols);
 	READ_ATTRNUMBER_ARRAY(sortColIdx, local_node->numCols);
@@ -1905,6 +1923,21 @@ _readCteScan(void)
 
 	READ_INT_FIELD(ctePlanId);
 	READ_INT_FIELD(cteParam);
+
+	READ_DONE();
+}
+
+/*
+ * _readNamedTuplestoreScan
+ */
+static NamedTuplestoreScan *
+_readNamedTuplestoreScan(void)
+{
+	READ_LOCALS(NamedTuplestoreScan);
+
+	ReadCommonScan(&local_node->scan);
+
+	READ_STRING_FIELD(enrname);
 
 	READ_DONE();
 }
@@ -2340,7 +2373,7 @@ _readPartitionedRelPruneInfo(void)
 {
 	READ_LOCALS(PartitionedRelPruneInfo);
 
-	READ_OID_FIELD(reloid);
+	READ_UINT_FIELD(rtindex);
 	READ_NODE_FIELD(pruning_steps);
 	READ_BITMAPSET_FIELD(present_parts);
 	READ_INT_FIELD(nparts);
@@ -2693,6 +2726,8 @@ parseNodeString(void)
 		return_value = _readTableFuncScan();
 	else if (MATCH("CTESCAN", 7))
 		return_value = _readCteScan();
+	else if (MATCH("NAMEDTUPLESTORESCAN", 19))
+		return_value = _readNamedTuplestoreScan();
 	else if (MATCH("WORKTABLESCAN", 13))
 		return_value = _readWorkTableScan();
 	else if (MATCH("FOREIGNSCAN", 11))
@@ -2778,7 +2813,7 @@ readDatum(bool typbyval)
 	Size		length,
 				i;
 	int			tokenLength;
-	char	   *token;
+	const char *token;
 	Datum		res;
 	char	   *s;
 
@@ -2791,7 +2826,7 @@ readDatum(bool typbyval)
 	token = pg_strtok(&tokenLength);	/* read the '[' */
 	if (token == NULL || token[0] != '[')
 		elog(ERROR, "expected \"[\" to start datum, but got \"%s\"; length = %zu",
-			 token ? (const char *) token : "[NULL]", length);
+			 token ? token : "[NULL]", length);
 
 	if (typbyval)
 	{
@@ -2821,7 +2856,7 @@ readDatum(bool typbyval)
 	token = pg_strtok(&tokenLength);	/* read the ']' */
 	if (token == NULL || token[0] != ']')
 		elog(ERROR, "expected \"]\" to end datum, but got \"%s\"; length = %zu",
-			 token ? (const char *) token : "[NULL]", length);
+			 token ? token : "[NULL]", length);
 
 	return res;
 }
@@ -2834,7 +2869,7 @@ readAttrNumberCols(int numCols)
 {
 	int			tokenLength,
 				i;
-	char	   *token;
+	const char *token;
 	AttrNumber *attr_vals;
 
 	if (numCols <= 0)
@@ -2858,7 +2893,7 @@ readOidCols(int numCols)
 {
 	int			tokenLength,
 				i;
-	char	   *token;
+	const char *token;
 	Oid		   *oid_vals;
 
 	if (numCols <= 0)
@@ -2882,7 +2917,7 @@ readIntCols(int numCols)
 {
 	int			tokenLength,
 				i;
-	char	   *token;
+	const char *token;
 	int		   *int_vals;
 
 	if (numCols <= 0)
@@ -2906,7 +2941,7 @@ readBoolCols(int numCols)
 {
 	int			tokenLength,
 				i;
-	char	   *token;
+	const char *token;
 	bool	   *bool_vals;
 
 	if (numCols <= 0)

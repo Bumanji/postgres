@@ -34,8 +34,10 @@
 
 struct PlanState;				/* forward references in this file */
 struct ParallelHashJoinState;
+struct ExecRowMark;
 struct ExprState;
 struct ExprContext;
+struct RangeTblEntry;			/* avoid including parsenodes.h here */
 struct ExprEvalStep;			/* avoid including execExpr.h everywhere */
 
 
@@ -120,7 +122,7 @@ typedef struct ExprState
  *
  *		NumIndexAttrs		total number of columns in this index
  *		NumIndexKeyAttrs	number of key columns in index
- *		KeyAttrNumbers		underlying-rel attribute numbers used as keys
+ *		IndexAttrNumbers	underlying-rel attribute numbers used as keys
  *							(zeroes indicate expressions). It also contains
  * 							info about included columns.
  *		Expressions			expr trees for expression entries, or NIL if none
@@ -138,6 +140,7 @@ typedef struct ExprState
  *		Concurrent			are we doing a concurrent index build?
  *		BrokenHotChain		did we detect any broken HOT chains?
  *		ParallelWorkers		# of workers requested (excludes leader)
+ *		Am					Oid of index AM
  *		AmCache				private cache area for index AM
  *		Context				memory context holding this IndexInfo
  *
@@ -385,12 +388,19 @@ typedef struct OnConflictSetState
  * Whenever we update an existing relation, we have to update indexes on the
  * relation, and perhaps also fire triggers.  ResultRelInfo holds all the
  * information needed about a result relation, including indexes.
+ *
+ * Normally, a ResultRelInfo refers to a table that is in the query's
+ * range table; then ri_RangeTableIndex is the RT index and ri_RelationDesc
+ * is just a copy of the relevant es_relations[] entry.  But sometimes,
+ * in ResultRelInfos used only for triggers, ri_RangeTableIndex is zero
+ * and ri_RelationDesc is a separately-opened relcache pointer that needs
+ * to be separately closed.  See ExecGetTriggerResultRel.
  */
 typedef struct ResultRelInfo
 {
 	NodeTag		type;
 
-	/* result relation's range table index */
+	/* result relation's range table index, or 0 if not in range table */
 	Index		ri_RangeTableIndex;
 
 	/* relation descriptor for result relation */
@@ -478,6 +488,12 @@ typedef struct EState
 	Snapshot	es_snapshot;	/* time qual to use */
 	Snapshot	es_crosscheck_snapshot; /* crosscheck time qual for RI */
 	List	   *es_range_table; /* List of RangeTblEntry */
+	struct RangeTblEntry **es_range_table_array;	/* equivalent array */
+	Index		es_range_table_size;	/* size of the range table arrays */
+	Relation   *es_relations;	/* Array of per-range-table-entry Relation
+								 * pointers, or NULL if not yet opened */
+	struct ExecRowMark **es_rowmarks;	/* Array of per-range-table-entry
+										 * ExecRowMarks, or NULL if none */
 	PlannedStmt *es_plannedstmt;	/* link to top of plan tree */
 	const char *es_sourceText;	/* Source text from QueryDesc */
 
@@ -492,11 +508,10 @@ typedef struct EState
 	ResultRelInfo *es_result_relation_info; /* currently active array elt */
 
 	/*
-	 * Info about the target partitioned target table root(s) for
-	 * update/delete queries.  They required only to fire any per-statement
-	 * triggers defined on the table.  It exists separately from
-	 * es_result_relations, because partitioned tables don't appear in the
-	 * plan tree for the update/delete cases.
+	 * Info about the partition root table(s) for insert/update/delete queries
+	 * targeting partitioned tables.  Only leaf partitions are mentioned in
+	 * es_result_relations, but we need access to the roots for firing
+	 * triggers and for runtime tuple routing.
 	 */
 	ResultRelInfo *es_root_result_relations;	/* array of ResultRelInfos */
 	int			es_num_root_result_relations;	/* length of the array */
@@ -523,8 +538,6 @@ typedef struct EState
 	MemoryContext es_query_cxt; /* per-query context in which EState lives */
 
 	List	   *es_tupleTable;	/* List of TupleTableSlots */
-
-	List	   *es_rowMarks;	/* List of ExecRowMarks */
 
 	uint64		es_processed;	/* # of tuples processed */
 	Oid			es_lastoid;		/* last oid processed (by INSERT) */
@@ -553,7 +566,7 @@ typedef struct EState
 	 * return, or NULL if nothing to return; es_epqTupleSet[] is true if a
 	 * particular array entry is valid; and es_epqScanDone[] is state to
 	 * remember if the tuple has been returned already.  Arrays are of size
-	 * list_length(es_range_table) and are indexed by scan node scanrelid - 1.
+	 * es_range_table_size and are indexed by scan node scanrelid - 1.
 	 */
 	HeapTuple  *es_epqTuple;	/* array of EPQ substitute tuples */
 	bool	   *es_epqTupleSet; /* true if EPQ tuple is provided */
@@ -568,9 +581,14 @@ typedef struct EState
 	 * JIT information. es_jit_flags indicates whether JIT should be performed
 	 * and with which options.  es_jit is created on-demand when JITing is
 	 * performed.
+	 *
+	 * es_jit_combined_instr is the the combined, on demand allocated,
+	 * instrumentation from all workers. The leader's instrumentation is kept
+	 * separate, and is combined on demand by ExplainPrintJITSummary().
 	 */
 	int			es_jit_flags;
 	struct JitContext *es_jit;
+	struct JitInstrumentation *es_jit_worker_instr;
 } EState;
 
 
@@ -589,7 +607,9 @@ typedef struct EState
  * node that sources the relation (e.g., for a foreign table the FDW can use
  * ermExtra to hold information).
  *
- * EState->es_rowMarks is a list of these structs.
+ * EState->es_rowmarks is an array of these structs, indexed by RT index,
+ * with NULLs for irrelevant RT indexes.  es_rowmarks itself is NULL if
+ * there are no rowmarks.
  */
 typedef struct ExecRowMark
 {
@@ -611,7 +631,7 @@ typedef struct ExecRowMark
  *	   additional runtime representation of FOR [KEY] UPDATE/SHARE clauses
  *
  * Each LockRows and ModifyTable node keeps a list of the rowmarks it needs to
- * deal with.  In addition to a pointer to the related entry in es_rowMarks,
+ * deal with.  In addition to a pointer to the related entry in es_rowmarks,
  * this struct carries the column number(s) of the resjunk columns associated
  * with the rowmark (see comments for PlanRowMark for more detail).  In the
  * case of ModifyTable, there has to be a separate ExecAuxRowMark list for
@@ -620,7 +640,7 @@ typedef struct ExecRowMark
  */
 typedef struct ExecAuxRowMark
 {
-	ExecRowMark *rowmark;		/* related entry in es_rowMarks */
+	ExecRowMark *rowmark;		/* related entry in es_rowmarks */
 	AttrNumber	ctidAttNo;		/* resno of ctid junk attribute, if any */
 	AttrNumber	toidAttNo;		/* resno of tableoid junk attribute, if any */
 	AttrNumber	wholeAttNo;		/* resno of whole-row junk attribute, if any */
@@ -921,6 +941,9 @@ typedef struct PlanState
 
 	Instrumentation *instrument;	/* Optional runtime stats for this node */
 	WorkerInstrumentation *worker_instrument;	/* per-worker instrumentation */
+
+	/* Per-worker JIT instrumentation */
+	struct SharedJitInstrumentation *worker_jit_instrument;
 
 	/*
 	 * Common structural data for all Plan types.  These links to subsidiary
@@ -1572,15 +1595,15 @@ typedef struct TableFuncScanState
 	ExprState  *rowexpr;		/* state for row-generating expression */
 	List	   *colexprs;		/* state for column-generating expression */
 	List	   *coldefexprs;	/* state for column default expressions */
-	List	   *ns_names;		/* list of str nodes with namespace names */
-	List	   *ns_uris;		/* list of states of namespace uri exprs */
+	List	   *ns_names;		/* same as TableFunc.ns_names */
+	List	   *ns_uris;		/* list of states of namespace URI exprs */
 	Bitmapset  *notnulls;		/* nullability flag for each output column */
 	void	   *opaque;			/* table builder private space */
 	const struct TableFuncRoutine *routine; /* table builder methods */
 	FmgrInfo   *in_functions;	/* input function for each column */
 	Oid		   *typioparams;	/* typioparam for each column */
 	int64		ordinal;		/* row number to be output next */
-	MemoryContext perValueCxt;	/* short life context for value evaluation */
+	MemoryContext perTableCxt;	/* per-table context */
 	Tuplestorestate *tupstore;	/* output tuple store */
 } TableFuncScanState;
 

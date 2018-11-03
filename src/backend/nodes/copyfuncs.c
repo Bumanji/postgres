@@ -91,7 +91,6 @@ _copyPlannedStmt(const PlannedStmt *from)
 	COPY_NODE_FIELD(planTree);
 	COPY_NODE_FIELD(rtable);
 	COPY_NODE_FIELD(resultRelations);
-	COPY_NODE_FIELD(nonleafResultRelations);
 	COPY_NODE_FIELD(rootResultRelations);
 	COPY_NODE_FIELD(subplans);
 	COPY_BITMAPSET_FIELD(rewindPlanIDs);
@@ -204,7 +203,7 @@ _copyModifyTable(const ModifyTable *from)
 	COPY_SCALAR_FIELD(operation);
 	COPY_SCALAR_FIELD(canSetTag);
 	COPY_SCALAR_FIELD(nominalRelation);
-	COPY_NODE_FIELD(partitioned_rels);
+	COPY_SCALAR_FIELD(rootRelation);
 	COPY_SCALAR_FIELD(partColsUpdated);
 	COPY_NODE_FIELD(resultRelations);
 	COPY_SCALAR_FIELD(resultRelIndex);
@@ -244,7 +243,6 @@ _copyAppend(const Append *from)
 	 */
 	COPY_NODE_FIELD(appendplans);
 	COPY_SCALAR_FIELD(first_partial_plan);
-	COPY_NODE_FIELD(partitioned_rels);
 	COPY_NODE_FIELD(part_prune_info);
 
 	return newnode;
@@ -266,7 +264,6 @@ _copyMergeAppend(const MergeAppend *from)
 	/*
 	 * copy remainder of node
 	 */
-	COPY_NODE_FIELD(partitioned_rels);
 	COPY_NODE_FIELD(mergeplans);
 	COPY_SCALAR_FIELD(numCols);
 	COPY_POINTER_FIELD(sortColIdx, from->numCols * sizeof(AttrNumber));
@@ -1193,7 +1190,7 @@ _copyPartitionedRelPruneInfo(const PartitionedRelPruneInfo *from)
 {
 	PartitionedRelPruneInfo *newnode = makeNode(PartitionedRelPruneInfo);
 
-	COPY_SCALAR_FIELD(reloid);
+	COPY_SCALAR_FIELD(rtindex);
 	COPY_NODE_FIELD(pruning_steps);
 	COPY_BITMAPSET_FIELD(present_parts);
 	COPY_SCALAR_FIELD(nparts);
@@ -2356,6 +2353,7 @@ _copyRangeTblEntry(const RangeTblEntry *from)
 	COPY_SCALAR_FIELD(rtekind);
 	COPY_SCALAR_FIELD(relid);
 	COPY_SCALAR_FIELD(relkind);
+	COPY_SCALAR_FIELD(rellockmode);
 	COPY_NODE_FIELD(tablesample);
 	COPY_NODE_FIELD(subquery);
 	COPY_SCALAR_FIELD(security_barrier);
@@ -4747,6 +4745,7 @@ _copyForeignKeyCacheInfo(const ForeignKeyCacheInfo *from)
 {
 	ForeignKeyCacheInfo *newnode = makeNode(ForeignKeyCacheInfo);
 
+	COPY_SCALAR_FIELD(conoid);
 	COPY_SCALAR_FIELD(conrelid);
 	COPY_SCALAR_FIELD(confrelid);
 	COPY_SCALAR_FIELD(nkeys);

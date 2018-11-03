@@ -715,7 +715,7 @@ check_default_partition_contents(Relation parent, Relation default_rel,
 
 		while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 		{
-			ExecStoreTuple(tuple, tupslot, InvalidBuffer, false);
+			ExecStoreHeapTuple(tuple, tupslot, false);
 			econtext->ecxt_scantuple = tupslot;
 
 			if (!ExecCheck(partqualstate, econtext))
@@ -1641,8 +1641,9 @@ get_qual_for_range(Relation parent, PartitionBoundSpec *spec,
 			datum = SysCacheGetAttr(RELOID, tuple,
 									Anum_pg_class_relpartbound,
 									&isnull);
+			if (isnull)
+				elog(ERROR, "null relpartbound for relation %u", inhrelid);
 
-			Assert(!isnull);
 			bspec = (PartitionBoundSpec *)
 				stringToNode(TextDatumGetCString(datum));
 			if (!IsA(bspec, PartitionBoundSpec))

@@ -28,12 +28,12 @@
  */
 
 #ifdef WIN32
-#define FD_SETSIZE 1024			/* set before winsock2.h is included */
-#endif							/* ! WIN32 */
+#define FD_SETSIZE 1024			/* must set before winsock2.h is included */
+#endif
 
 #include "postgres_fe.h"
+#include "common/int.h"
 #include "fe_utils/conditional.h"
-
 #include "getopt_long.h"
 #include "libpq-fe.h"
 #include "portability/instr_time.h"
@@ -45,12 +45,21 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/time.h>
+#ifdef HAVE_SYS_RESOURCE_H
+#include <sys/resource.h>		/* for getrlimit */
+#endif
+
+/* For testing, PGBENCH_USE_SELECT can be defined to force use of that code */
+#if defined(HAVE_PPOLL) && !defined(PGBENCH_USE_SELECT)
+#define POLL_USING_PPOLL
+#ifdef HAVE_POLL_H
+#include <poll.h>
+#endif
+#else							/* no ppoll(), so use select() */
+#define POLL_USING_SELECT
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>
 #endif
-
-#ifdef HAVE_SYS_RESOURCE_H
-#include <sys/resource.h>		/* for getrlimit */
 #endif
 
 #ifndef M_PI
@@ -69,6 +78,33 @@
 #define MM2_MUL				UINT64CONST(0xc6a4a7935bd1e995)
 #define MM2_MUL_TIMES_8		UINT64CONST(0x35253c9ade8f4ca8)
 #define MM2_ROT				47
+
+/*
+ * Multi-platform socket set implementations
+ */
+
+#ifdef POLL_USING_PPOLL
+#define SOCKET_WAIT_METHOD "ppoll"
+
+typedef struct socket_set
+{
+	int			maxfds;			/* allocated length of pollfds[] array */
+	int			curfds;			/* number currently in use */
+	struct pollfd pollfds[FLEXIBLE_ARRAY_MEMBER];
+} socket_set;
+
+#endif							/* POLL_USING_PPOLL */
+
+#ifdef POLL_USING_SELECT
+#define SOCKET_WAIT_METHOD "select"
+
+typedef struct socket_set
+{
+	int			maxfd;			/* largest FD currently set in fds */
+	fd_set		fds;
+} socket_set;
+
+#endif							/* POLL_USING_SELECT */
 
 /*
  * Multi-platform pthread implementations
@@ -92,13 +128,6 @@ static int	pthread_join(pthread_t th, void **thread_return);
 
 /********************************************************************
  * some configurable parameters */
-
-/* max number of clients allowed */
-#ifdef FD_SETSIZE
-#define MAXCLIENTS	(FD_SETSIZE - 10)
-#else
-#define MAXCLIENTS	1024
-#endif
 
 #define DEFAULT_INIT_STEPS "dtgvp"	/* default -I setting */
 
@@ -140,7 +169,7 @@ double		sample_rate = 0.0;
  * When threads are throttled to a given rate limit, this is the target delay
  * to reach that rate in usec.  0 is the default and means no throttling.
  */
-int64		throttle_delay = 0;
+double		throttle_delay = 0;
 
 /*
  * Transactions which take longer than this limit (in usec) are counted as
@@ -523,8 +552,14 @@ static void processXactStats(TState *thread, CState *st, instr_time *now,
 static void pgbench_error(const char *fmt,...) pg_attribute_printf(1, 2);
 static void addScript(ParsedScript script);
 static void *threadRun(void *arg);
-static void setalarm(int seconds);
 static void finishCon(CState *st);
+static void setalarm(int seconds);
+static socket_set *alloc_socket_set(int count);
+static void free_socket_set(socket_set *sa);
+static void clear_socket_set(socket_set *sa);
+static void add_socket_to_set(socket_set *sa, int fd, int idx);
+static int	wait_on_socket_set(socket_set *sa, int64 usecs);
+static bool socket_has_input(socket_set *sa, int fd, int idx);
 
 
 /* callback functions for our flex lexer */
@@ -627,19 +662,27 @@ is_an_int(const char *str)
 /*
  * strtoint64 -- convert a string to 64-bit integer
  *
- * This function is a modified version of scanint8() from
+ * This function is a slightly modified version of scanint8() from
  * src/backend/utils/adt/int8.c.
+ *
+ * The function returns whether the conversion worked, and if so
+ * "*result" is set to the result.
+ *
+ * If not errorOK, an error message is also printed out on errors.
  */
-int64
-strtoint64(const char *str)
+bool
+strtoint64(const char *str, bool errorOK, int64 *result)
 {
 	const char *ptr = str;
-	int64		result = 0;
-	int			sign = 1;
+	int64		tmp = 0;
+	bool		neg = false;
 
 	/*
 	 * Do our own scan, rather than relying on sscanf which might be broken
 	 * for long long.
+	 *
+	 * As INT64_MIN can't be stored as a positive 64 bit integer, accumulate
+	 * value as a negative number.
 	 */
 
 	/* skip leading spaces */
@@ -650,46 +693,80 @@ strtoint64(const char *str)
 	if (*ptr == '-')
 	{
 		ptr++;
-
-		/*
-		 * Do an explicit check for INT64_MIN.  Ugly though this is, it's
-		 * cleaner than trying to get the loop below to handle it portably.
-		 */
-		if (strncmp(ptr, "9223372036854775808", 19) == 0)
-		{
-			result = PG_INT64_MIN;
-			ptr += 19;
-			goto gotdigits;
-		}
-		sign = -1;
+		neg = true;
 	}
 	else if (*ptr == '+')
 		ptr++;
 
 	/* require at least one digit */
-	if (!isdigit((unsigned char) *ptr))
-		fprintf(stderr, "invalid input syntax for integer: \"%s\"\n", str);
+	if (unlikely(!isdigit((unsigned char) *ptr)))
+		goto invalid_syntax;
 
 	/* process digits */
 	while (*ptr && isdigit((unsigned char) *ptr))
 	{
-		int64		tmp = result * 10 + (*ptr++ - '0');
+		int8		digit = (*ptr++ - '0');
 
-		if ((tmp / 10) != result)	/* overflow? */
-			fprintf(stderr, "value \"%s\" is out of range for type bigint\n", str);
-		result = tmp;
+		if (unlikely(pg_mul_s64_overflow(tmp, 10, &tmp)) ||
+			unlikely(pg_sub_s64_overflow(tmp, digit, &tmp)))
+			goto out_of_range;
 	}
-
-gotdigits:
 
 	/* allow trailing whitespace, but not other trailing chars */
 	while (*ptr != '\0' && isspace((unsigned char) *ptr))
 		ptr++;
 
-	if (*ptr != '\0')
-		fprintf(stderr, "invalid input syntax for integer: \"%s\"\n", str);
+	if (unlikely(*ptr != '\0'))
+		goto invalid_syntax;
 
-	return ((sign < 0) ? -result : result);
+	if (!neg)
+	{
+		if (unlikely(tmp == PG_INT64_MIN))
+			goto out_of_range;
+		tmp = -tmp;
+	}
+
+	*result = tmp;
+	return true;
+
+out_of_range:
+	if (!errorOK)
+		fprintf(stderr,
+				"value \"%s\" is out of range for type bigint\n", str);
+	return false;
+
+invalid_syntax:
+	if (!errorOK)
+		fprintf(stderr,
+				"invalid input syntax for type bigint: \"%s\"\n",str);
+	return false;
+}
+
+/* convert string to double, detecting overflows/underflows */
+bool
+strtodouble(const char *str, bool errorOK, double *dv)
+{
+	char *end;
+
+	errno = 0;
+	*dv = strtod(str, &end);
+
+	if (unlikely(errno != 0))
+	{
+		if (!errorOK)
+			fprintf(stderr,
+					"value \"%s\" is out of range for type double\n", str);
+		return false;
+	}
+
+	if (unlikely(end == str || *end != '\0'))
+	{
+		if (!errorOK)
+			fprintf(stderr,
+					"invalid input syntax for type double: \"%s\"\n",str);
+		return false;
+	}
+	return true;
 }
 
 /* random number generator: uniform distribution from min to max inclusive */
@@ -791,9 +868,12 @@ getGaussianRand(TState *thread, int64 min, int64 max, double parameter)
 /*
  * random number generator: generate a value, such that the series of values
  * will approximate a Poisson distribution centered on the given value.
+ *
+ * Individual results are rounded to integers, though the center value need
+ * not be one.
  */
 static int64
-getPoissonRand(TState *thread, int64 center)
+getPoissonRand(TState *thread, double center)
 {
 	/*
 	 * Use inverse transform sampling to generate a value > 0, such that the
@@ -804,7 +884,7 @@ getPoissonRand(TState *thread, int64 center)
 	/* erand in [0, 1), uniform in (0, 1] */
 	uniform = 1.0 - pg_erand48(thread->random_state);
 
-	return (int64) (-log(uniform) * ((double) center) + 0.5);
+	return (int64) (-log(uniform) * center + 0.5);
 }
 
 /* helper function for getZipfianRand */
@@ -1282,14 +1362,19 @@ makeVariableValue(Variable *var)
 	}
 	else if (is_an_int(var->svalue))
 	{
-		setIntValue(&var->value, strtoint64(var->svalue));
+		/* if it looks like an int, it must be an int without overflow */
+		int64 iv;
+
+		if (!strtoint64(var->svalue, false, &iv))
+			return false;
+
+		setIntValue(&var->value, iv);
 	}
 	else						/* type should be double */
 	{
 		double		dv;
-		char		xs;
 
-		if (sscanf(var->svalue, "%lf%c", &dv, &xs) != 1)
+		if (!strtodouble(var->svalue, true, &dv))
 		{
 			fprintf(stderr,
 					"malformed variable \"%s\" value: \"%s\"\n",
@@ -1905,7 +1990,8 @@ evalStandardFunc(TState *thread, CState *st,
 				else			/* we have integer operands, or % */
 				{
 					int64		li,
-								ri;
+								ri,
+								res;
 
 					if (!coerceToInt(lval, &li) ||
 						!coerceToInt(rval, &ri))
@@ -1914,15 +2000,30 @@ evalStandardFunc(TState *thread, CState *st,
 					switch (func)
 					{
 						case PGBENCH_ADD:
-							setIntValue(retval, li + ri);
+							if (pg_add_s64_overflow(li, ri, &res))
+							{
+								fprintf(stderr, "bigint add out of range\n");
+								return false;
+							}
+							setIntValue(retval, res);
 							return true;
 
 						case PGBENCH_SUB:
-							setIntValue(retval, li - ri);
+							if (pg_sub_s64_overflow(li, ri, &res))
+							{
+								fprintf(stderr, "bigint sub out of range\n");
+								return false;
+							}
+							setIntValue(retval, res);
 							return true;
 
 						case PGBENCH_MUL:
-							setIntValue(retval, li * ri);
+							if (pg_mul_s64_overflow(li, ri, &res))
+							{
+								fprintf(stderr, "bigint mul out of range\n");
+								return false;
+							}
+							setIntValue(retval, res);
 							return true;
 
 						case PGBENCH_EQ:
@@ -1956,7 +2057,7 @@ evalStandardFunc(TState *thread, CState *st,
 									/* overflow check (needed for INT64_MIN) */
 									if (li == PG_INT64_MIN)
 									{
-										fprintf(stderr, "bigint out of range\n");
+										fprintf(stderr, "bigint div out of range\n");
 										return false;
 									}
 									else
@@ -4830,6 +4931,8 @@ main(int argc, char **argv)
 	PGresult   *res;
 	char	   *env;
 
+	int			exit_code = 0;
+
 	progname = get_progname(argv[0]);
 
 	if (argc > 1)
@@ -4903,7 +5006,7 @@ main(int argc, char **argv)
 			case 'c':
 				benchmarking_option_set = true;
 				nclients = atoi(optarg);
-				if (nclients <= 0 || nclients > MAXCLIENTS)
+				if (nclients <= 0)
 				{
 					fprintf(stderr, "invalid number of clients: \"%s\"\n",
 							optarg);
@@ -5079,8 +5182,8 @@ main(int argc, char **argv)
 						fprintf(stderr, "invalid rate limit: \"%s\"\n", optarg);
 						exit(1);
 					}
-					/* Invert rate limit into a time offset */
-					throttle_delay = (int64) (1000000.0 / throttle_value);
+					/* Invert rate limit into per-transaction delay in usec */
+					throttle_delay = 1000000.0 / throttle_value;
 				}
 				break;
 			case 'L':
@@ -5204,7 +5307,11 @@ main(int argc, char **argv)
 	if (nthreads > nclients)
 		nthreads = nclients;
 
-	/* compute a per thread delay */
+	/*
+	 * Convert throttle_delay to a per-thread delay time.  Note that this
+	 * might be a fractional number of usec, but that's OK, since it's just
+	 * the center of a Poisson distribution of delays.
+	 */
 	throttle_delay *= nthreads;
 
 	if (argc > optind)
@@ -5570,6 +5677,10 @@ main(int argc, char **argv)
 		(void) threadRun(thread);
 #endif							/* ENABLE_THREAD_SAFETY */
 
+		for (int j = 0; j < thread->nstate; j++)
+			if (thread->state[j].state == CSTATE_ABORTED)
+				exit_code = 2;
+
 		/* aggregate thread level stats */
 		mergeSimpleStats(&stats.latency, &thread->stats.latency);
 		mergeSimpleStats(&stats.lag, &thread->stats.lag);
@@ -5594,7 +5705,10 @@ main(int argc, char **argv)
 	INSTR_TIME_SUBTRACT(total_time, start_time);
 	printResults(threads, &stats, total_time, conn_total_time, latency_late);
 
-	return 0;
+	if (exit_code != 0)
+		fprintf(stderr, "Run was aborted; the above results are incomplete.\n");
+
+	return exit_code;
 }
 
 static void *
@@ -5606,6 +5720,7 @@ threadRun(void *arg)
 				end;
 	int			nstate = thread->nstate;
 	int			remains = nstate;	/* number of remaining clients */
+	socket_set *sockets = alloc_socket_set(nstate);
 	int			i;
 
 	/* for reporting progress: */
@@ -5673,14 +5788,16 @@ threadRun(void *arg)
 	/* loop till all clients have terminated */
 	while (remains > 0)
 	{
-		fd_set		input_mask;
-		int			maxsock;	/* max socket number to be waited for */
+		int			nsocks;		/* number of sockets to be waited for */
 		int64		min_usec;
 		int64		now_usec = 0;	/* set this only if needed */
 
-		/* identify which client sockets should be checked for input */
-		FD_ZERO(&input_mask);
-		maxsock = -1;
+		/*
+		 * identify which client sockets should be checked for input, and
+		 * compute the nearest time (if any) at which we need to wake up.
+		 */
+		clear_socket_set(sockets);
+		nsocks = 0;
 		min_usec = PG_INT64_MAX;
 		for (i = 0; i < nstate; i++)
 		{
@@ -5728,9 +5845,7 @@ threadRun(void *arg)
 					goto done;
 				}
 
-				FD_SET(sock, &input_mask);
-				if (maxsock < sock)
-					maxsock = sock;
+				add_socket_to_set(sockets, sock, nsocks++);
 			}
 			else if (st->state != CSTATE_ABORTED &&
 					 st->state != CSTATE_FINISHED)
@@ -5764,35 +5879,29 @@ threadRun(void *arg)
 
 		/*
 		 * If no clients are ready to execute actions, sleep until we receive
-		 * data from the server, or a nap-time specified in the script ends,
-		 * or it's time to print a progress report.  Update input_mask to show
-		 * which client(s) received data.
+		 * data on some client socket or the timeout (if any) elapses.
 		 */
 		if (min_usec > 0)
 		{
-			int			nsocks = 0; /* return from select(2) if called */
+			int			rc = 0;
 
 			if (min_usec != PG_INT64_MAX)
 			{
-				if (maxsock != -1)
+				if (nsocks > 0)
 				{
-					struct timeval timeout;
-
-					timeout.tv_sec = min_usec / 1000000;
-					timeout.tv_usec = min_usec % 1000000;
-					nsocks = select(maxsock + 1, &input_mask, NULL, NULL, &timeout);
+					rc = wait_on_socket_set(sockets, min_usec);
 				}
 				else			/* nothing active, simple sleep */
 				{
 					pg_usleep(min_usec);
 				}
 			}
-			else				/* no explicit delay, select without timeout */
+			else				/* no explicit delay, wait without timeout */
 			{
-				nsocks = select(maxsock + 1, &input_mask, NULL, NULL, NULL);
+				rc = wait_on_socket_set(sockets, 0);
 			}
 
-			if (nsocks < 0)
+			if (rc < 0)
 			{
 				if (errno == EINTR)
 				{
@@ -5800,19 +5909,20 @@ threadRun(void *arg)
 					continue;
 				}
 				/* must be something wrong */
-				fprintf(stderr, "select() failed: %s\n", strerror(errno));
+				fprintf(stderr, "%s() failed: %s\n", SOCKET_WAIT_METHOD, strerror(errno));
 				goto done;
 			}
 		}
 		else
 		{
-			/* min_usec == 0, i.e. something needs to be executed */
+			/* min_usec <= 0, i.e. something needs to be executed now */
 
-			/* If we didn't call select(), don't try to read any data */
-			FD_ZERO(&input_mask);
+			/* If we didn't wait, don't try to read any data */
+			clear_socket_set(sockets);
 		}
 
 		/* ok, advance the state machine of each connection */
+		nsocks = 0;
 		for (i = 0; i < nstate; i++)
 		{
 			CState	   *st = &state[i];
@@ -5829,7 +5939,7 @@ threadRun(void *arg)
 					goto done;
 				}
 
-				if (!FD_ISSET(sock, &input_mask))
+				if (!socket_has_input(sockets, sock, nsocks++))
 					continue;
 			}
 			else if (st->state == CSTATE_FINISHED ||
@@ -5967,6 +6077,7 @@ done:
 		fclose(thread->logfile);
 		thread->logfile = NULL;
 	}
+	free_socket_set(sockets);
 	return NULL;
 }
 
@@ -6025,7 +6136,184 @@ setalarm(int seconds)
 	}
 }
 
+#endif							/* WIN32 */
+
+
+/*
+ * These functions provide an abstraction layer that hides the syscall
+ * we use to wait for input on a set of sockets.
+ *
+ * Currently there are two implementations, based on ppoll(2) and select(2).
+ * ppoll() is preferred where available due to its typically higher ceiling
+ * on the number of usable sockets.  We do not use the more-widely-available
+ * poll(2) because it only offers millisecond timeout resolution, which could
+ * be problematic with high --rate settings.
+ *
+ * Function APIs:
+ *
+ * alloc_socket_set: allocate an empty socket set with room for up to
+ *		"count" sockets.
+ *
+ * free_socket_set: deallocate a socket set.
+ *
+ * clear_socket_set: reset a socket set to empty.
+ *
+ * add_socket_to_set: add socket with indicated FD to slot "idx" in the
+ *		socket set.  Slots must be filled in order, starting with 0.
+ *
+ * wait_on_socket_set: wait for input on any socket in set, or for timeout
+ *		to expire.  timeout is measured in microseconds; 0 means wait forever.
+ *		Returns result code of underlying syscall (>=0 if OK, else see errno).
+ *
+ * socket_has_input: after waiting, call this to see if given socket has
+ *		input.  fd and idx parameters should match some previous call to
+ *		add_socket_to_set.
+ *
+ * Note that wait_on_socket_set destructively modifies the state of the
+ * socket set.  After checking for input, caller must apply clear_socket_set
+ * and add_socket_to_set again before waiting again.
+ */
+
+#ifdef POLL_USING_PPOLL
+
+static socket_set *
+alloc_socket_set(int count)
+{
+	socket_set *sa;
+
+	sa = (socket_set *) pg_malloc0(offsetof(socket_set, pollfds) +
+								   sizeof(struct pollfd) * count);
+	sa->maxfds = count;
+	sa->curfds = 0;
+	return sa;
+}
+
+static void
+free_socket_set(socket_set *sa)
+{
+	pg_free(sa);
+}
+
+static void
+clear_socket_set(socket_set *sa)
+{
+	sa->curfds = 0;
+}
+
+static void
+add_socket_to_set(socket_set *sa, int fd, int idx)
+{
+	Assert(idx < sa->maxfds && idx == sa->curfds);
+	sa->pollfds[idx].fd = fd;
+	sa->pollfds[idx].events = POLLIN;
+	sa->pollfds[idx].revents = 0;
+	sa->curfds++;
+}
+
+static int
+wait_on_socket_set(socket_set *sa, int64 usecs)
+{
+	if (usecs > 0)
+	{
+		struct timespec timeout;
+
+		timeout.tv_sec = usecs / 1000000;
+		timeout.tv_nsec = (usecs % 1000000) * 1000;
+		return ppoll(sa->pollfds, sa->curfds, &timeout, NULL);
+	}
+	else
+	{
+		return ppoll(sa->pollfds, sa->curfds, NULL, NULL);
+	}
+}
+
+static bool
+socket_has_input(socket_set *sa, int fd, int idx)
+{
+	/*
+	 * In some cases, threadRun will apply clear_socket_set and then try to
+	 * apply socket_has_input anyway with arguments that it used before that,
+	 * or might've used before that except that it exited its setup loop
+	 * early.  Hence, if the socket set is empty, silently return false
+	 * regardless of the parameters.  If it's not empty, we can Assert that
+	 * the parameters match a previous call.
+	 */
+	if (sa->curfds == 0)
+		return false;
+
+	Assert(idx < sa->curfds && sa->pollfds[idx].fd == fd);
+	return (sa->pollfds[idx].revents & POLLIN) != 0;
+}
+
+#endif							/* POLL_USING_PPOLL */
+
+#ifdef POLL_USING_SELECT
+
+static socket_set *
+alloc_socket_set(int count)
+{
+	return (socket_set *) pg_malloc0(sizeof(socket_set));
+}
+
+static void
+free_socket_set(socket_set *sa)
+{
+	pg_free(sa);
+}
+
+static void
+clear_socket_set(socket_set *sa)
+{
+	FD_ZERO(&sa->fds);
+	sa->maxfd = -1;
+}
+
+static void
+add_socket_to_set(socket_set *sa, int fd, int idx)
+{
+	if (fd < 0 || fd >= FD_SETSIZE)
+	{
+		/*
+		 * Doing a hard exit here is a bit grotty, but it doesn't seem worth
+		 * complicating the API to make it less grotty.
+		 */
+		fprintf(stderr, "too many client connections for select()\n");
+		exit(1);
+	}
+	FD_SET(fd, &sa->fds);
+	if (fd > sa->maxfd)
+		sa->maxfd = fd;
+}
+
+static int
+wait_on_socket_set(socket_set *sa, int64 usecs)
+{
+	if (usecs > 0)
+	{
+		struct timeval timeout;
+
+		timeout.tv_sec = usecs / 1000000;
+		timeout.tv_usec = usecs % 1000000;
+		return select(sa->maxfd + 1, &sa->fds, NULL, NULL, &timeout);
+	}
+	else
+	{
+		return select(sa->maxfd + 1, &sa->fds, NULL, NULL, NULL);
+	}
+}
+
+static bool
+socket_has_input(socket_set *sa, int fd, int idx)
+{
+	return (FD_ISSET(fd, &sa->fds) != 0);
+}
+
+#endif							/* POLL_USING_SELECT */
+
+
 /* partial pthread implementation for Windows */
+
+#ifdef WIN32
 
 typedef struct win32_pthread
 {

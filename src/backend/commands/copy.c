@@ -31,6 +31,7 @@
 #include "commands/trigger.h"
 #include "executor/execPartition.h"
 #include "executor/executor.h"
+#include "executor/tuptable.h"
 #include "foreign/fdwapi.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
@@ -833,20 +834,21 @@ DoCopy(ParseState *pstate, const CopyStmt *stmt,
 
 	if (stmt->relation)
 	{
+		LOCKMODE	lockmode = is_from ? RowExclusiveLock : AccessShareLock;
+		RangeTblEntry *rte;
 		TupleDesc	tupDesc;
 		List	   *attnums;
 		ListCell   *cur;
-		RangeTblEntry *rte;
 
 		Assert(!stmt->query);
 
 		/* Open and lock the relation, using the appropriate lock type. */
-		rel = heap_openrv(stmt->relation,
-						  (is_from ? RowExclusiveLock : AccessShareLock));
+		rel = heap_openrv(stmt->relation, lockmode);
 
 		relid = RelationGetRelid(rel);
 
-		rte = addRangeTableEntryForRelation(pstate, rel, NULL, false, false);
+		rte = addRangeTableEntryForRelation(pstate, rel, lockmode,
+											NULL, false, false);
 		rte->requiredPerms = (is_from ? ACL_INSERT : ACL_SELECT);
 
 		tupDesc = RelationGetDescr(rel);
@@ -2469,7 +2471,7 @@ CopyFrom(CopyState cstate)
 	resultRelInfo = makeNode(ResultRelInfo);
 	InitResultRelInfo(resultRelInfo,
 					  cstate->rel,
-					  1,		/* dummy rangetable index */
+					  1,		/* must match rel's position in range_table */
 					  NULL,
 					  0);
 	target_resultRelInfo = resultRelInfo;
@@ -2482,7 +2484,8 @@ CopyFrom(CopyState cstate)
 	estate->es_result_relations = resultRelInfo;
 	estate->es_num_result_relations = 1;
 	estate->es_result_relation_info = resultRelInfo;
-	estate->es_range_table = cstate->range_table;
+
+	ExecInitRangeTable(estate, cstate->range_table);
 
 	/* Set up a tuple slot too */
 	myslot = ExecInitExtraTupleSlot(estate, tupDesc);
@@ -2684,12 +2687,13 @@ CopyFrom(CopyState cstate)
 
 		/* Place tuple in tuple slot --- but slot shouldn't free it */
 		slot = myslot;
-		ExecStoreTuple(tuple, slot, InvalidBuffer, false);
+		ExecStoreHeapTuple(tuple, slot, false);
 
 		/* Determine the partition to heap_insert the tuple into */
 		if (proute)
 		{
 			int			leaf_part_index;
+			TupleConversionMap *map;
 
 			/*
 			 * Away we go ... If we end up not finding a partition after all,
@@ -2779,21 +2783,7 @@ CopyFrom(CopyState cstate)
 						lastPartitionSampleLineNo = cstate->cur_lineno;
 						nPartitionChanges = 0;
 					}
-
-					/*
-					 * Tests have shown that using multi-inserts when the
-					 * partition changes on every tuple slightly decreases the
-					 * performance, however, there are benefits even when only
-					 * some batches have just 2 tuples, so let's enable
-					 * multi-inserts even when the average is quite low.
-					 */
-					leafpart_use_multi_insert = avgTuplesPerPartChange >= 1.3 &&
-						!has_before_insert_row_trig &&
-						!has_instead_insert_row_trig &&
-						resultRelInfo->ri_FdwRoutine == NULL;
 				}
-				else
-					leafpart_use_multi_insert = false;
 
 				/*
 				 * Overwrite resultRelInfo with the corresponding partition's
@@ -2816,6 +2806,19 @@ CopyFrom(CopyState cstate)
 
 				has_instead_insert_row_trig = (resultRelInfo->ri_TrigDesc &&
 											   resultRelInfo->ri_TrigDesc->trig_insert_instead_row);
+
+				/*
+				 * Tests have shown that using multi-inserts when the
+				 * partition changes on every tuple slightly decreases the
+				 * performance, however, there are benefits even when only
+				 * some batches have just 2 tuples, so let's enable
+				 * multi-inserts even when the average is quite low.
+				 */
+				leafpart_use_multi_insert = insertMethod == CIM_MULTI_CONDITIONAL &&
+					avgTuplesPerPartChange >= 1.3 &&
+					!has_before_insert_row_trig &&
+					!has_instead_insert_row_trig &&
+					resultRelInfo->ri_FdwRoutine == NULL;
 
 				/*
 				 * We'd better make the bulk insert mechanism gets a new
@@ -2861,14 +2864,27 @@ CopyFrom(CopyState cstate)
 
 			/*
 			 * We might need to convert from the parent rowtype to the
-			 * partition rowtype.  Don't free the already stored tuple as it
-			 * may still be required for a multi-insert batch.
+			 * partition rowtype.
 			 */
-			tuple = ConvertPartitionTupleSlot(proute->parent_child_tupconv_maps[leaf_part_index],
-											  tuple,
-											  proute->partition_tuple_slot,
-											  &slot,
-											  false);
+			map = proute->parent_child_tupconv_maps[leaf_part_index];
+			if (map != NULL)
+			{
+				TupleTableSlot *new_slot;
+				MemoryContext oldcontext;
+
+				Assert(proute->partition_tuple_slots != NULL &&
+					   proute->partition_tuple_slots[leaf_part_index] != NULL);
+				new_slot = proute->partition_tuple_slots[leaf_part_index];
+				slot = execute_attr_map_slot(map->attrMap, slot, new_slot);
+
+				/*
+				 * Get the tuple in the per-tuple context, so that it will be
+				 * freed after each batch insert.
+				 */
+				oldcontext = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
+				tuple = ExecCopySlotTuple(slot);
+				MemoryContextSwitchTo(oldcontext);
+			}
 
 			tuple->t_tableOid = RelationGetRelid(resultRelInfo->ri_RelationDesc);
 		}
@@ -3119,7 +3135,7 @@ CopyFromInsertBatch(CopyState cstate, EState *estate, CommandId mycid,
 			List	   *recheckIndexes;
 
 			cstate->cur_lineno = firstBufferedLineNo + i;
-			ExecStoreTuple(bufferedTuples[i], myslot, InvalidBuffer, false);
+			ExecStoreHeapTuple(bufferedTuples[i], myslot, false);
 			recheckIndexes =
 				ExecInsertIndexTuples(myslot, &(bufferedTuples[i]->t_self),
 									  estate, false, NULL, NIL);

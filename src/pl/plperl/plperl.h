@@ -29,11 +29,14 @@
  * Sometimes perl carefully scribbles on our *printf macros.
  * So we undefine them here and redefine them after it's done its dirty deed.
  */
-
-#ifdef USE_REPL_SNPRINTF
-#undef snprintf
 #undef vsnprintf
-#endif
+#undef snprintf
+#undef vsprintf
+#undef sprintf
+#undef vfprintf
+#undef fprintf
+#undef vprintf
+#undef printf
 
 /*
  * ActivePerl 5.18 and later are MinGW-built, and their headers use GCC's
@@ -92,28 +95,45 @@
 #undef socket
 #undef stat
 #undef unlink
-#undef vfprintf
 #endif
 
 #include "XSUB.h"
 #endif
 
-/* put back our snprintf and vsnprintf */
-#ifdef USE_REPL_SNPRINTF
-#ifdef snprintf
-#undef snprintf
-#endif
+/* put back our *printf macros ... this must match src/include/port.h */
 #ifdef vsnprintf
 #undef vsnprintf
 #endif
-#ifdef __GNUC__
-#define vsnprintf(...)	pg_vsnprintf(__VA_ARGS__)
-#define snprintf(...)	pg_snprintf(__VA_ARGS__)
-#else
+#ifdef snprintf
+#undef snprintf
+#endif
+#ifdef vsprintf
+#undef vsprintf
+#endif
+#ifdef sprintf
+#undef sprintf
+#endif
+#ifdef vfprintf
+#undef vfprintf
+#endif
+#ifdef fprintf
+#undef fprintf
+#endif
+#ifdef vprintf
+#undef vprintf
+#endif
+#ifdef printf
+#undef printf
+#endif
+
 #define vsnprintf		pg_vsnprintf
 #define snprintf		pg_snprintf
-#endif							/* __GNUC__ */
-#endif							/* USE_REPL_SNPRINTF */
+#define vsprintf		pg_vsprintf
+#define sprintf			pg_sprintf
+#define vfprintf		pg_vfprintf
+#define fprintf			pg_fprintf
+#define vprintf			pg_vprintf
+#define printf(...)		pg_printf(__VA_ARGS__)
 
 /* perl version and platform portability */
 #define NEED_eval_pv

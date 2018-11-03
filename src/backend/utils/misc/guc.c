@@ -41,6 +41,7 @@
 #include "commands/vacuum.h"
 #include "commands/variable.h"
 #include "commands/trigger.h"
+#include "common/string.h"
 #include "funcapi.h"
 #include "jit/jit.h"
 #include "libpq/auth.h"
@@ -514,7 +515,6 @@ static int	server_version_num;
 static char *timezone_string;
 static char *log_timezone_string;
 static char *timezone_abbreviations_string;
-static char *XactIsoLevel_string;
 static char *data_directory;
 static char *session_authorization_string;
 static int	max_function_args;
@@ -962,7 +962,7 @@ static struct config_bool ConfigureNamesBool[] =
 	},
 	{
 		{"enable_parallel_hash", PGC_USERSET, QUERY_TUNING_METHOD,
-			gettext_noop("Enables the planner's user of parallel hash plans."),
+			gettext_noop("Enables the planner's use of parallel hash plans."),
 			NULL
 		},
 		&enable_parallel_hash,
@@ -2539,7 +2539,7 @@ static struct config_int ConfigureNamesInt[] =
 	},
 
 	{
-		{"wal_sender_timeout", PGC_SIGHUP, REPLICATION_SENDING,
+		{"wal_sender_timeout", PGC_USERSET, REPLICATION_SENDING,
 			gettext_noop("Sets the maximum time to wait for WAL replication."),
 			NULL,
 			GUC_UNIT_MS
@@ -2649,10 +2649,11 @@ static struct config_int ConfigureNamesInt[] =
 		},
 		&effective_io_concurrency,
 #ifdef USE_PREFETCH
-		1, 0, MAX_IO_CONCURRENCY,
+		1,
 #else
-		0, 0, 0,
+		0,
 #endif
+		0, MAX_IO_CONCURRENCY,
 		check_effective_io_concurrency, assign_effective_io_concurrency, NULL
 	},
 
@@ -2986,10 +2987,9 @@ static struct config_int ConfigureNamesInt[] =
 
 	{
 		{"effective_cache_size", PGC_USERSET, QUERY_TUNING_COST,
-			gettext_noop("Sets the planner's assumption about the size of the disk cache."),
-			gettext_noop("That is, the portion of the kernel's disk cache that "
-						 "will be used for PostgreSQL data files. This is measured in disk "
-						 "pages, which are normally 8 kB each."),
+			gettext_noop("Sets the planner's assumption about the size of the data cache."),
+			gettext_noop("That is, the size of the cache used for PostgreSQL data files. "
+						 "This is measured in disk pages, which are normally 8 kB each."),
 			GUC_UNIT_BLOCKS,
 		},
 		&effective_cache_size,
@@ -3617,17 +3617,6 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"transaction_isolation", PGC_USERSET, CLIENT_CONN_STATEMENT,
-			gettext_noop("Sets the current transaction's isolation level."),
-			NULL,
-			GUC_NO_RESET_ALL | GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE
-		},
-		&XactIsoLevel_string,
-		"default",
-		check_XactIsoLevel, assign_XactIsoLevel, show_XactIsoLevel
-	},
-
-	{
 		{"unix_socket_group", PGC_POSTMASTER, CONN_AUTH_SETTINGS,
 			gettext_noop("Sets the owning group of the Unix-domain socket."),
 			gettext_noop("The owning user of the socket is always the user "
@@ -3895,7 +3884,7 @@ static struct config_string ConfigureNamesString[] =
 	},
 
 	{
-		{"jit_provider", PGC_POSTMASTER, FILE_LOCATIONS,
+		{"jit_provider", PGC_POSTMASTER, CLIENT_CONN_PRELOAD,
 			gettext_noop("JIT provider to use."),
 			NULL,
 			GUC_SUPERUSER_ONLY
@@ -3964,6 +3953,17 @@ static struct config_enum ConfigureNamesEnum[] =
 		&DefaultXactIsoLevel,
 		XACT_READ_COMMITTED, isolation_level_options,
 		NULL, NULL, NULL
+	},
+
+	{
+		{"transaction_isolation", PGC_USERSET, CLIENT_CONN_STATEMENT,
+			gettext_noop("Sets the current transaction's isolation level."),
+			NULL,
+			GUC_NO_RESET_ALL | GUC_NOT_IN_SAMPLE | GUC_DISALLOW_IN_FILE
+		},
+		&XactIsoLevel,
+		XACT_READ_COMMITTED, isolation_level_options,
+		check_XactIsoLevel, NULL, NULL
 	},
 
 	{
@@ -4774,7 +4774,7 @@ InitializeGUCOptions(void)
 	 * Prevent any attempt to override the transaction modes from
 	 * non-interactive sources.
 	 */
-	SetConfigOption("transaction_isolation", "default",
+	SetConfigOption("transaction_isolation", "read committed",
 					PGC_POSTMASTER, PGC_S_OVERRIDE);
 	SetConfigOption("transaction_read_only", "no",
 					PGC_POSTMASTER, PGC_S_OVERRIDE);
@@ -8454,13 +8454,13 @@ GetConfigOptionByNum(int varnum, const char **values, bool *noshow)
 		values[2] = NULL;
 
 	/* group */
-	values[3] = config_group_names[conf->group];
+	values[3] = _(config_group_names[conf->group]);
 
 	/* short_desc */
-	values[4] = conf->short_desc;
+	values[4] = _(conf->short_desc);
 
 	/* extra_desc */
-	values[5] = conf->long_desc;
+	values[5] = _(conf->long_desc);
 
 	/* context */
 	values[6] = GucContext_Names[conf->context];
@@ -9445,20 +9445,15 @@ do_serialize(char **destptr, Size *maxbytes, const char *fmt,...)
 	n = vsnprintf(*destptr, *maxbytes, fmt, vargs);
 	va_end(vargs);
 
-	/*
-	 * Cater to portability hazards in the vsnprintf() return value just like
-	 * appendPQExpBufferVA() does.  Note that this requires an extra byte of
-	 * slack at the end of the buffer.  Since serialize_variable() ends with a
-	 * do_serialize_binary() rather than a do_serialize(), we'll always have
-	 * that slack; estimate_variable_size() need not add a byte for it.
-	 */
-	if (n < 0 || n >= *maxbytes - 1)
+	if (n < 0)
 	{
-		if (n < 0 && errno != 0 && errno != ENOMEM)
-			/* Shouldn't happen. Better show errno description. */
-			elog(ERROR, "vsnprintf failed: %m");
-		else
-			elog(ERROR, "not enough space to serialize GUC state");
+		/* Shouldn't happen. Better show errno description. */
+		elog(ERROR, "vsnprintf failed: %m");
+	}
+	if (n >= *maxbytes)
+	{
+		/* This shouldn't happen either, really. */
+		elog(ERROR, "not enough space to serialize GUC state");
 	}
 
 	/* Shift the destptr ahead of the null terminator */
@@ -10714,6 +10709,11 @@ check_effective_io_concurrency(int *newval, void **extra, GucSource source)
 	else
 		return false;
 #else
+	if (*newval != 0)
+	{
+		GUC_check_errdetail("effective_io_concurrency must be set to 0 on platforms that lack posix_fadvise()");
+		return false;
+	}
 	return true;
 #endif							/* USE_PREFETCH */
 }
@@ -10759,13 +10759,7 @@ static bool
 check_application_name(char **newval, void **extra, GucSource source)
 {
 	/* Only allow clean ASCII chars in the application name */
-	char	   *p;
-
-	for (p = *newval; *p; p++)
-	{
-		if (*p < 32 || *p > 126)
-			*p = '?';
-	}
+	pg_clean_ascii(*newval);
 
 	return true;
 }
@@ -10781,13 +10775,7 @@ static bool
 check_cluster_name(char **newval, void **extra, GucSource source)
 {
 	/* Only allow clean ASCII chars in the cluster name */
-	char	   *p;
-
-	for (p = *newval; *p; p++)
-	{
-		if (*p < 32 || *p > 126)
-			*p = '?';
-	}
+	pg_clean_ascii(*newval);
 
 	return true;
 }

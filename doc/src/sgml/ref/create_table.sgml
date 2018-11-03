@@ -992,7 +992,9 @@ WITH ( MODULUS <replaceable class="parameter">numeric_literal</replaceable>, REM
       is used.  The referenced columns must be the columns of a non-deferrable
       unique or primary key constraint in the referenced table.  The user
       must have <literal>REFERENCES</literal> permission on the referenced table
-      (either the whole table, or the specific referenced columns).
+      (either the whole table, or the specific referenced columns).  The
+      addition of a foreign key constraint requires a
+      <literal>SHARE ROW EXCLUSIVE</literal> lock on the referenced table.
       Note that foreign key constraints cannot be defined between temporary
       tables and permanent tables.  Also note that while it is possible to
       define a foreign key on a partitioned table, it is not possible to
@@ -2001,6 +2003,30 @@ CREATE TABLE cities_partdef
     other database systems (and for symmetry with the <literal>NOT
     NULL</literal> constraint).  Since it is the default for any
     column, its presence is simply noise.
+   </para>
+  </refsect2>
+
+  <refsect2>
+   <title>Constraint Naming</title>
+
+   <para>
+    The SQL standard says that table and domain constraints must have names
+    that are unique across the schema containing the table or domain.
+    <productname>PostgreSQL</productname> is laxer: it only requires
+    constraint names to be unique across the constraints attached to a
+    particular table or domain.  However, this extra freedom does not exist
+    for index-based constraints (<literal>UNIQUE</literal>,
+    <literal>PRIMARY KEY</literal>, and <literal>EXCLUDE</literal>
+    constraints), because the associated index is named the same as the
+    constraint, and index names must be unique across all relations within
+    the same schema.
+   </para>
+
+   <para>
+    Currently, <productname>PostgreSQL</productname> does not record names
+    for <literal>NOT NULL</literal> constraints at all, so they are not
+    subject to the uniqueness restriction.  This might change in a future
+    release.
    </para>
   </refsect2>
 

@@ -224,7 +224,7 @@ llvm_expand_funcname(struct LLVMJitContext *context, const char *basename)
 {
 	Assert(context->module != NULL);
 
-	context->base.created_functions++;
+	context->base.instr.created_functions++;
 
 	/*
 	 * Previously we used dots to separate, but turns out some tools, e.g.
@@ -438,7 +438,7 @@ llvm_optimize_module(LLVMJitContext *context, LLVMModuleRef module)
 
 	if (context->base.flags & PGJIT_OPT3)
 	{
-		/* TODO: Unscientifically determined threshhold */
+		/* TODO: Unscientifically determined threshold */
 		LLVMPassManagerBuilderUseInlinerWithThreshold(llvm_pmb, 512);
 	}
 	else
@@ -504,7 +504,7 @@ llvm_compile_module(LLVMJitContext *context)
 		INSTR_TIME_SET_CURRENT(starttime);
 		llvm_inline(context->module);
 		INSTR_TIME_SET_CURRENT(endtime);
-		INSTR_TIME_ACCUM_DIFF(context->base.inlining_counter,
+		INSTR_TIME_ACCUM_DIFF(context->base.instr.inlining_counter,
 							  endtime, starttime);
 	}
 
@@ -524,7 +524,7 @@ llvm_compile_module(LLVMJitContext *context)
 	INSTR_TIME_SET_CURRENT(starttime);
 	llvm_optimize_module(context, context->module);
 	INSTR_TIME_SET_CURRENT(endtime);
-	INSTR_TIME_ACCUM_DIFF(context->base.optimization_counter,
+	INSTR_TIME_ACCUM_DIFF(context->base.instr.optimization_counter,
 						  endtime, starttime);
 
 	if (jit_dump_bitcode)
@@ -575,7 +575,7 @@ llvm_compile_module(LLVMJitContext *context)
 	}
 #endif
 	INSTR_TIME_SET_CURRENT(endtime);
-	INSTR_TIME_ACCUM_DIFF(context->base.emission_counter,
+	INSTR_TIME_ACCUM_DIFF(context->base.instr.emission_counter,
 						  endtime, starttime);
 
 	context->module = NULL;
@@ -596,9 +596,9 @@ llvm_compile_module(LLVMJitContext *context)
 
 	ereport(DEBUG1,
 			(errmsg("time to inline: %.3fs, opt: %.3fs, emit: %.3fs",
-					INSTR_TIME_GET_DOUBLE(context->base.inlining_counter),
-					INSTR_TIME_GET_DOUBLE(context->base.optimization_counter),
-					INSTR_TIME_GET_DOUBLE(context->base.emission_counter)),
+					INSTR_TIME_GET_DOUBLE(context->base.instr.inlining_counter),
+					INSTR_TIME_GET_DOUBLE(context->base.instr.optimization_counter),
+					INSTR_TIME_GET_DOUBLE(context->base.instr.emission_counter)),
 			 errhidestmt(true),
 			 errhidecontext(true)));
 }
@@ -853,7 +853,7 @@ llvm_split_symbol_name(const char *name, char **modname, char **funcname)
 	{
 		/*
 		 * Symbol names cannot contain a ., therefore we can split based on
-		 * first and last occurance of one.
+		 * first and last occurrence of one.
 		 */
 		*funcname = rindex(name, '.');
 		(*funcname)++;			/* jump over . */

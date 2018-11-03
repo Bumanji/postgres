@@ -75,7 +75,7 @@ static int	MyTriggerDepth = 0;
  * to be changed, however.
  */
 #define GetUpdatedColumns(relinfo, estate) \
-	(rt_fetch((relinfo)->ri_RangeTableIndex, (estate)->es_range_table)->updatedCols)
+	(exec_rt_fetch((relinfo)->ri_RangeTableIndex, estate)->updatedCols)
 
 /* Local function prototypes */
 static void ConvertTriggerToFK(CreateTrigStmt *stmt, Oid funcoid);
@@ -577,10 +577,12 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 		 * 'OLD' must always have varno equal to 1 and 'NEW' equal to 2.
 		 */
 		rte = addRangeTableEntryForRelation(pstate, rel,
+											AccessShareLock,
 											makeAlias("old", NIL),
 											false, false);
 		addRTEtoQuery(pstate, rte, false, true, true);
 		rte = addRangeTableEntryForRelation(pstate, rel,
+											AccessShareLock,
 											makeAlias("new", NIL),
 											false, false);
 		addRTEtoQuery(pstate, rte, false, true, true);
@@ -749,7 +751,6 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 											  ' ',
 											  NULL, /* no exclusion */
 											  NULL, /* no check constraint */
-											  NULL,
 											  NULL,
 											  true, /* islocal */
 											  0,	/* inhcount */
@@ -2571,7 +2572,7 @@ ExecBRInsertTriggers(EState *estate, ResultRelInfo *relinfo,
 
 		if (newslot->tts_tupleDescriptor != tupdesc)
 			ExecSetSlotDescriptor(newslot, tupdesc);
-		ExecStoreTuple(newtuple, newslot, InvalidBuffer, false);
+		ExecStoreHeapTuple(newtuple, newslot, false);
 		slot = newslot;
 	}
 	return slot;
@@ -2652,7 +2653,7 @@ ExecIRInsertTriggers(EState *estate, ResultRelInfo *relinfo,
 
 		if (newslot->tts_tupleDescriptor != tupdesc)
 			ExecSetSlotDescriptor(newslot, tupdesc);
-		ExecStoreTuple(newtuple, newslot, InvalidBuffer, false);
+		ExecStoreHeapTuple(newtuple, newslot, false);
 		slot = newslot;
 	}
 	return slot;
@@ -3078,7 +3079,7 @@ ExecBRUpdateTriggers(EState *estate, EPQState *epqstate,
 
 		if (newslot->tts_tupleDescriptor != tupdesc)
 			ExecSetSlotDescriptor(newslot, tupdesc);
-		ExecStoreTuple(newtuple, newslot, InvalidBuffer, false);
+		ExecStoreHeapTuple(newtuple, newslot, false);
 		slot = newslot;
 	}
 	return slot;
@@ -3186,7 +3187,7 @@ ExecIRUpdateTriggers(EState *estate, ResultRelInfo *relinfo,
 
 		if (newslot->tts_tupleDescriptor != tupdesc)
 			ExecSetSlotDescriptor(newslot, tupdesc);
-		ExecStoreTuple(newtuple, newslot, InvalidBuffer, false);
+		ExecStoreHeapTuple(newtuple, newslot, false);
 		slot = newslot;
 	}
 	return slot;
@@ -3396,7 +3397,10 @@ ltrmark:;
 		LockBuffer(buffer, BUFFER_LOCK_UNLOCK);
 	}
 
-	result = heap_copytuple(&tuple);
+	if (HeapTupleHeaderGetNatts(tuple.t_data) < relation->rd_att->natts)
+		result = heap_expand_tuple(&tuple, relation->rd_att);
+	else
+		result = heap_copytuple(&tuple);
 	ReleaseBuffer(buffer);
 
 	return result;
@@ -3511,7 +3515,7 @@ TriggerEnabled(EState *estate, ResultRelInfo *relinfo,
 			oldslot = estate->es_trig_oldtup_slot;
 			if (oldslot->tts_tupleDescriptor != tupdesc)
 				ExecSetSlotDescriptor(oldslot, tupdesc);
-			ExecStoreTuple(oldtup, oldslot, InvalidBuffer, false);
+			ExecStoreHeapTuple(oldtup, oldslot, false);
 		}
 		if (HeapTupleIsValid(newtup))
 		{
@@ -3525,7 +3529,7 @@ TriggerEnabled(EState *estate, ResultRelInfo *relinfo,
 			newslot = estate->es_trig_newtup_slot;
 			if (newslot->tts_tupleDescriptor != tupdesc)
 				ExecSetSlotDescriptor(newslot, tupdesc);
-			ExecStoreTuple(newtup, newslot, InvalidBuffer, false);
+			ExecStoreHeapTuple(newtup, newslot, false);
 		}
 
 		/*
@@ -5781,7 +5785,7 @@ AfterTriggerSaveEvent(EState *estate, ResultRelInfo *relinfo,
 
 			if (map != NULL)
 			{
-				HeapTuple	converted = do_convert_tuple(oldtup, map);
+				HeapTuple	converted = execute_attr_map_tuple(oldtup, map);
 
 				tuplestore_puttuple(old_tuplestore, converted);
 				pfree(converted);
@@ -5801,7 +5805,7 @@ AfterTriggerSaveEvent(EState *estate, ResultRelInfo *relinfo,
 				tuplestore_puttuple(new_tuplestore, original_insert_tuple);
 			else if (map != NULL)
 			{
-				HeapTuple	converted = do_convert_tuple(newtup, map);
+				HeapTuple	converted = execute_attr_map_tuple(newtup, map);
 
 				tuplestore_puttuple(new_tuplestore, converted);
 				pfree(converted);

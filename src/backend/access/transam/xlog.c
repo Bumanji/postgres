@@ -78,12 +78,6 @@
 
 extern uint32 bootstrap_data_checksum_version;
 
-/* File path names (all relative to $PGDATA) */
-#define RECOVERY_COMMAND_FILE	"recovery.conf"
-#define RECOVERY_COMMAND_DONE	"recovery.done"
-#define PROMOTE_SIGNAL_FILE		"promote"
-#define FALLBACK_PROMOTE_SIGNAL_FILE "fallback_promote"
-
 
 /* User-settable parameters */
 int			max_wal_size_mb = 1024; /* 1 GB */
@@ -944,7 +938,7 @@ static void WALInsertLockUpdateInsertingAt(XLogRecPtr insertingAt);
  *
  * If 'fpw_lsn' is valid, it is the oldest LSN among the pages that this
  * WAL record applies to, that were not included in the record as full page
- * images.  If fpw_lsn >= RedoRecPtr, the function does not perform the
+ * images.  If fpw_lsn <= RedoRecPtr, the function does not perform the
  * insertion and returns InvalidXLogRecPtr.  The caller can then recalculate
  * which pages need a full-page image, and retry.  If fpw_lsn is invalid, the
  * record is always inserted.
@@ -977,6 +971,7 @@ XLogInsertRecord(XLogRecData *rdata,
 							   info == XLOG_SWITCH);
 	XLogRecPtr	StartPos;
 	XLogRecPtr	EndPos;
+	bool		prevDoPageWrites = doPageWrites;
 
 	/* we assume that all of the record header is in the first chunk */
 	Assert(rdata->len >= SizeOfXLogRecord);
@@ -1024,10 +1019,14 @@ XLogInsertRecord(XLogRecData *rdata,
 		WALInsertLockAcquire();
 
 	/*
-	 * Check to see if my copy of RedoRecPtr or doPageWrites is out of date.
-	 * If so, may have to go back and have the caller recompute everything.
-	 * This can only happen just after a checkpoint, so it's better to be slow
-	 * in this case and fast otherwise.
+	 * Check to see if my copy of RedoRecPtr is out of date. If so, may have
+	 * to go back and have the caller recompute everything. This can only
+	 * happen just after a checkpoint, so it's better to be slow in this case
+	 * and fast otherwise.
+	 *
+	 * Also check to see if fullPageWrites or forcePageWrites was just turned
+	 * on; if we weren't already doing full-page writes then go back and
+	 * recompute.
 	 *
 	 * If we aren't doing full-page writes then RedoRecPtr doesn't actually
 	 * affect the contents of the XLOG record, so we'll update our local copy
@@ -1042,7 +1041,9 @@ XLogInsertRecord(XLogRecData *rdata,
 	}
 	doPageWrites = (Insert->fullPageWrites || Insert->forcePageWrites);
 
-	if (fpw_lsn != InvalidXLogRecPtr && fpw_lsn <= RedoRecPtr && doPageWrites)
+	if (doPageWrites &&
+		(!prevDoPageWrites ||
+		 (fpw_lsn != InvalidXLogRecPtr && fpw_lsn <= RedoRecPtr)))
 	{
 		/*
 		 * Oops, some buffer now needs to be backed up that the caller didn't
@@ -2723,9 +2724,13 @@ UpdateMinRecoveryPoint(XLogRecPtr lsn, bool force)
 	 * i.e., we're doing crash recovery.  We never modify the control file's
 	 * value in that case, so we can short-circuit future checks here too. The
 	 * local values of minRecoveryPoint and minRecoveryPointTLI should not be
-	 * updated until crash recovery finishes.
+	 * updated until crash recovery finishes.  We only do this for the startup
+	 * process as it should not update its own reference of minRecoveryPoint
+	 * until it has finished crash recovery to make sure that all WAL
+	 * available is replayed in this case.  This also saves from extra locks
+	 * taken on the control file from the startup process.
 	 */
-	if (XLogRecPtrIsInvalid(minRecoveryPoint))
+	if (XLogRecPtrIsInvalid(minRecoveryPoint) && InRecovery)
 	{
 		updateMinRecoveryPoint = false;
 		return;
@@ -2737,7 +2742,9 @@ UpdateMinRecoveryPoint(XLogRecPtr lsn, bool force)
 	minRecoveryPoint = ControlFile->minRecoveryPoint;
 	minRecoveryPointTLI = ControlFile->minRecoveryPointTLI;
 
-	if (force || minRecoveryPoint < lsn)
+	if (XLogRecPtrIsInvalid(minRecoveryPoint))
+		updateMinRecoveryPoint = false;
+	else if (force || minRecoveryPoint < lsn)
 	{
 		XLogRecPtr	newMinRecoveryPoint;
 		TimeLineID	newMinRecoveryPointTLI;
@@ -3127,9 +3134,11 @@ XLogNeedsFlush(XLogRecPtr record)
 		 * An invalid minRecoveryPoint means that we need to recover all the
 		 * WAL, i.e., we're doing crash recovery.  We never modify the control
 		 * file's value in that case, so we can short-circuit future checks
-		 * here too.
+		 * here too.  This triggers a quick exit path for the startup process,
+		 * which cannot update its local copy of minRecoveryPoint as long as
+		 * it has not replayed all WAL available when doing crash recovery.
 		 */
-		if (XLogRecPtrIsInvalid(minRecoveryPoint))
+		if (XLogRecPtrIsInvalid(minRecoveryPoint) && InRecovery)
 			updateMinRecoveryPoint = false;
 
 		/* Quick exit if already known to be updated or cannot be updated */
@@ -3146,8 +3155,19 @@ XLogNeedsFlush(XLogRecPtr record)
 		minRecoveryPointTLI = ControlFile->minRecoveryPointTLI;
 		LWLockRelease(ControlFileLock);
 
+		/*
+		 * Check minRecoveryPoint for any other process than the startup
+		 * process doing crash recovery, which should not update the control
+		 * file value if crash recovery is still running.
+		 */
+		if (XLogRecPtrIsInvalid(minRecoveryPoint))
+			updateMinRecoveryPoint = false;
+
 		/* check again */
-		return record > minRecoveryPoint;
+		if (record <= minRecoveryPoint || !updateMinRecoveryPoint)
+			return false;
+		else
+			return true;
 	}
 
 	/* Quick exit if already known flushed */
@@ -3191,8 +3211,7 @@ XLogFileInit(XLogSegNo logsegno, bool *use_existent, bool use_lock)
 {
 	char		path[MAXPGPATH];
 	char		tmppath[MAXPGPATH];
-	char		zbuffer_raw[XLOG_BLCKSZ + MAXIMUM_ALIGNOF];
-	char	   *zbuffer;
+	PGAlignedXLogBlock zbuffer;
 	XLogSegNo	installed_segno;
 	XLogSegNo	max_segno;
 	int			fd;
@@ -3244,17 +3263,13 @@ XLogFileInit(XLogSegNo logsegno, bool *use_existent, bool use_lock)
 	 * fsync below) that all the indirect blocks are down on disk.  Therefore,
 	 * fdatasync(2) or O_DSYNC will be sufficient to sync future writes to the
 	 * log file.
-	 *
-	 * Note: ensure the buffer is reasonably well-aligned; this may save a few
-	 * cycles transferring data to the kernel.
 	 */
-	zbuffer = (char *) MAXALIGN(zbuffer_raw);
-	memset(zbuffer, 0, XLOG_BLCKSZ);
+	memset(zbuffer.data, 0, XLOG_BLCKSZ);
 	for (nbytes = 0; nbytes < wal_segment_size; nbytes += XLOG_BLCKSZ)
 	{
 		errno = 0;
 		pgstat_report_wait_start(WAIT_EVENT_WAL_INIT_WRITE);
-		if ((int) write(fd, zbuffer, XLOG_BLCKSZ) != (int) XLOG_BLCKSZ)
+		if ((int) write(fd, zbuffer.data, XLOG_BLCKSZ) != (int) XLOG_BLCKSZ)
 		{
 			int			save_errno = errno;
 
@@ -3361,7 +3376,7 @@ XLogFileCopy(XLogSegNo destsegno, TimeLineID srcTLI, XLogSegNo srcsegno,
 {
 	char		path[MAXPGPATH];
 	char		tmppath[MAXPGPATH];
-	char		buffer[XLOG_BLCKSZ];
+	PGAlignedXLogBlock buffer;
 	int			srcfd;
 	int			fd;
 	int			nbytes;
@@ -3404,7 +3419,7 @@ XLogFileCopy(XLogSegNo destsegno, TimeLineID srcTLI, XLogSegNo srcsegno,
 		 * zeros.
 		 */
 		if (nread < sizeof(buffer))
-			memset(buffer, 0, sizeof(buffer));
+			memset(buffer.data, 0, sizeof(buffer));
 
 		if (nread > 0)
 		{
@@ -3413,7 +3428,7 @@ XLogFileCopy(XLogSegNo destsegno, TimeLineID srcTLI, XLogSegNo srcsegno,
 			if (nread > sizeof(buffer))
 				nread = sizeof(buffer);
 			pgstat_report_wait_start(WAIT_EVENT_WAL_COPY_READ);
-			r = read(srcfd, buffer, nread);
+			r = read(srcfd, buffer.data, nread);
 			if (r != nread)
 			{
 				if (r < 0)
@@ -3431,7 +3446,7 @@ XLogFileCopy(XLogSegNo destsegno, TimeLineID srcTLI, XLogSegNo srcsegno,
 		}
 		errno = 0;
 		pgstat_report_wait_start(WAIT_EVENT_WAL_COPY_WRITE);
-		if ((int) write(fd, buffer, sizeof(buffer)) != (int) sizeof(buffer))
+		if ((int) write(fd, buffer.data, sizeof(buffer)) != (int) sizeof(buffer))
 		{
 			int			save_errno = errno;
 
@@ -4729,11 +4744,11 @@ ReadControlFile(void)
 	/* check and update variables dependent on wal_segment_size */
 	if (ConvertToXSegs(min_wal_size_mb, wal_segment_size) < 2)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("\"min_wal_size\" must be at least twice \"wal_segment_size\".")));
+						errmsg("\"min_wal_size\" must be at least twice \"wal_segment_size\"")));
 
 	if (ConvertToXSegs(max_wal_size_mb, wal_segment_size) < 2)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("\"max_wal_size\" must be at least twice \"wal_segment_size\".")));
+						errmsg("\"max_wal_size\" must be at least twice \"wal_segment_size\"")));
 
 	UsableBytesInSegment =
 		(wal_segment_size / XLOG_BLCKSZ * UsableBytesInPage) -
@@ -5564,7 +5579,7 @@ readRecoveryCommandFile(void)
 	}
 
 	/*
-	 * Override any inconsistent requests. Not that this is a change of
+	 * Override any inconsistent requests. Note that this is a change of
 	 * behaviour in 9.5; prior to this we simply ignored a request to pause if
 	 * hot_standby = off, which was surprising behaviour.
 	 */
@@ -6521,8 +6536,11 @@ StartupXLOG(void)
 	xlogreader->system_identifier = ControlFile->system_identifier;
 
 	/*
-	 * Allocate pages dedicated to WAL consistency checks, those had better be
-	 * aligned.
+	 * Allocate two page buffers dedicated to WAL consistency checks.  We do
+	 * it this way, rather than just making static arrays, for two reasons:
+	 * (1) no need to waste the storage in most instantiations of the backend;
+	 * (2) a static char array isn't guaranteed to have any particular
+	 * alignment, whereas palloc() will provide MAXALIGN'd storage.
 	 */
 	replay_image_masked = (char *) palloc(BLCKSZ);
 	master_image_masked = (char *) palloc(BLCKSZ);
@@ -6809,11 +6827,12 @@ StartupXLOG(void)
 	StartupMultiXact();
 
 	/*
-	 * Ditto commit timestamps.  In a standby, we do it if setting is enabled
-	 * in ControlFile; in a master we base the decision on the GUC itself.
+	 * Ditto for commit timestamps.  Activate the facility if the setting is
+	 * enabled in the control file, as there should be no tracking of commit
+	 * timestamps done when the setting was disabled.  This facility can be
+	 * started or stopped when replaying a XLOG_PARAMETER_CHANGE record.
 	 */
-	if (ArchiveRecoveryRequested ?
-		ControlFile->track_commit_timestamp : track_commit_timestamp)
+	if (ControlFile->track_commit_timestamp)
 		StartupCommitTs();
 
 	/*
@@ -9676,6 +9695,7 @@ void
 UpdateFullPageWrites(void)
 {
 	XLogCtlInsert *Insert = &XLogCtl->Insert;
+	bool		recoveryInProgress;
 
 	/*
 	 * Do nothing if full_page_writes has not been changed.
@@ -9686,6 +9706,13 @@ UpdateFullPageWrites(void)
 	 */
 	if (fullPageWrites == Insert->fullPageWrites)
 		return;
+
+	/*
+	 * Perform this outside critical section so that the WAL insert
+	 * initialization done by RecoveryInProgress() doesn't trigger an
+	 * assertion failure.
+	 */
+	recoveryInProgress = RecoveryInProgress();
 
 	START_CRIT_SECTION();
 
@@ -9707,7 +9734,7 @@ UpdateFullPageWrites(void)
 	 * Write an XLOG_FPW_CHANGE record. This allows us to keep track of
 	 * full_page_writes during archive recovery, if required.
 	 */
-	if (XLogStandbyInfoActive() && !RecoveryInProgress())
+	if (XLogStandbyInfoActive() && !recoveryInProgress)
 	{
 		XLogBeginInsert();
 		XLogRegisterData((char *) (&fullPageWrites), sizeof(bool));
