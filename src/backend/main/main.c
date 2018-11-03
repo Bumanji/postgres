@@ -149,6 +149,11 @@ main(int argc, char *argv[])
 	 * later during GUC option processing, but we set it here to allow startup
 	 * error messages to be localized.
 	 */
+	/*
+	 * 从环境中设置本地信息。注意如果数据库已初始化，那么LC_CTYPE和LC_COLLATE之后会被
+	 * pg_control覆盖。我们在这里设置它们，这样在initdb时就可以满足pg_control。LC_MESSAGES
+	 * 在之后处理GUC选项的时候设置，但我们在这里设置一下，这样可以本地化启动出错的消息。
+	 */
 
 	set_pglocale_pgservice(argv[0], PG_TEXTDOMAIN("postgres"));
 
@@ -186,6 +191,9 @@ main(int argc, char *argv[])
 	 * We keep these set to "C" always, except transiently in pg_locale.c; see
 	 * that file for explanations.
 	 */
+	/*
+	 * 除了pg_locale.c暂时不同之外，我们总是将以下的变量设为"C"；参见pg_locale.c文件查看详情。
+	 */
 	init_locale("LC_MONETARY", LC_MONETARY, "C");
 	init_locale("LC_NUMERIC", LC_NUMERIC, "C");
 	init_locale("LC_TIME", LC_TIME, "C");
@@ -194,6 +202,10 @@ main(int argc, char *argv[])
 	 * Now that we have absorbed as much as we wish to from the locale
 	 * environment, remove any LC_ALL setting, so that the environment
 	 * variables installed by pg_perm_setlocale have force.
+	 */
+	/*
+	 * 到现在为止，我们尽可能多地从本地环境获取变量，删除LC_ALL的任何设定，这样pg_perm_setlocale
+	 * 安装的环境变量可以生效。
 	 */
 	unsetenv("LC_ALL");
 
