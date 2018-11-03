@@ -116,6 +116,14 @@ main(int argc, char *argv[])
 	 * startup, to avoid entanglements with code that might save a getenv()
 	 * result pointer.
 	 */
+	/*
+	 * 记住最初给定的argv[]数组的物理位置，ps显示的时候可能会用到。在有些平台上，argv[]的存储
+	 * 空间会被覆盖，用来设置ps的进程title。这些情况下，save_ps_display_args会生产并返回argv[]
+	 * 数组的一个新的拷贝。
+	 * 
+	 * save_ps_display_args也可能移动环境变量字符串来产生额外的空间。所以，应该在启动时尽早
+	 * 完成，以防止与保存getenv()结果指针的代码产生什么瓜葛。
+	 */
 	argv = save_ps_display_args(argc, argv);
 
 	/*
@@ -124,6 +132,12 @@ main(int argc, char *argv[])
 	 * Code after this point is allowed to use elog/ereport, though
 	 * localization of messages may not work right away, and messages won't go
 	 * anywhere but stderr until GUC settings get loaded.
+	 */
+	/*
+	 * 点亮核心子系统：错误处理和内存管理
+	 *
+	 * 在此之后的代码可以使用elog/ereport，尽管消息本地化可能不能正常工作，并且在GUC设置
+	 * 加载之前，消息只能输出到stderr。
 	 */
 	MemoryContextInit();
 
