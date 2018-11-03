@@ -1181,6 +1181,10 @@ fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
  *					 heap access method interface
  * ----------------------------------------------------------------
  */
+/* ----------------------------------------------------------------
+ *					 堆访问方法接口
+ * ----------------------------------------------------------------
+ */
 
 /* ----------------
  *		relation_open - open any relation by relation OID
@@ -1194,6 +1198,18 @@ fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
  *
  *		NB: a "relation" is anything with a pg_class entry.  The caller is
  *		expected to check whether the relkind is something it can handle.
+ * ----------------
+ */
+/* ----------------
+ *		relation_open - 通过关系OID打开关系
+ *
+ *		如果lockmode非"NoLock"，则获取关系上指定的锁。（一般来说，NoLock只是在调用者
+ *		知道关系上已经有了适当的锁的时候使用。）
+ *
+ *		关系不存在则报错。
+ *
+ *		注意："关系"是指有一个pg_class项的任何事物。调用者应该去检查能够处理返回的类型为
+ *		relkind的关系。
  * ----------------
  */
 Relation
