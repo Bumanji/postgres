@@ -215,6 +215,9 @@ main(int argc, char *argv[])
 	 * Catch standard options before doing much else, in particular before we
 	 * insist on not being root.
 	 */
+	/*
+	 * 在做其他事情之前先处理标准选项，特别是要在确定非root用户运行本程序之前。
+	 */
 	if (argc > 1)
 	{
 		if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-?") == 0)
