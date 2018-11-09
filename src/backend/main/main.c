@@ -241,6 +241,13 @@ main(int argc, char *argv[])
 		 * reduces the risk that we might misinterpret some other mode's -C
 		 * switch as being the postmaster/postgres one.
 		 */
+		/*
+		 * 在上述选项之外，我们允许以root权限运行"--describe-config"和"-C var"选项。
+		 * 这对安全性来说是合理的，因为这2个选项只有只读的操作。-C很重要因为pg_ctl会试图
+		 * 在还持有管理员权限的时候调用它。注意，虽然-C可以在argv的任意位置，但如果你想忽略
+		 * root检查，你必须将它放在第一个。这就减少了将其他模式的-C选项当成postmaster/postgres
+		 * 选项的风险。
+		 */
 		if (strcmp(argv[1], "--describe-config") == 0)
 			do_check_root = false;
 		else if (argc > 2 && strcmp(argv[1], "-C") == 0)
@@ -251,11 +258,17 @@ main(int argc, char *argv[])
 	 * Make sure we are not running as root, unless it's safe for the selected
 	 * option.
 	 */
+	/*
+	 * 确认我们没有用root用户运行，除非选项是安全的。
+	 */
 	if (do_check_root)
 		check_root(progname);
 
 	/*
 	 * Dispatch to one of various subprograms depending on first argument.
+	 */
+	/*
+	 * 根据第一个参数，执行不同的代码。
 	 */
 
 #ifdef EXEC_BACKEND
