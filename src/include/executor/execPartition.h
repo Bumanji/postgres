@@ -18,35 +18,7 @@
 #include "nodes/plannodes.h"
 #include "partitioning/partprune.h"
 
-/*-----------------------
- * PartitionDispatch - information about one partitioned table in a partition
- * hierarchy required to route a tuple to one of its partitions
- *
- *	reldesc		Relation descriptor of the table
- *	key			Partition key information of the table
- *	keystate	Execution state required for expressions in the partition key
- *	partdesc	Partition descriptor of the table
- *	tupslot		A standalone TupleTableSlot initialized with this table's tuple
- *				descriptor
- *	tupmap		TupleConversionMap to convert from the parent's rowtype to
- *				this table's rowtype (when extracting the partition key of a
- *				tuple just before routing it through this table)
- *	indexes		Array with partdesc->nparts members (for details on what
- *				individual members represent, see how they are set in
- *				get_partition_dispatch_recurse())
- *-----------------------
- */
-typedef struct PartitionDispatchData
-{
-	Relation	reldesc;
-	PartitionKey key;
-	List	   *keystate;		/* list of ExprState */
-	PartitionDesc partdesc;
-	TupleTableSlot *tupslot;
-	TupleConversionMap *tupmap;
-	int		   *indexes;
-} PartitionDispatchData;
-
+/* See execPartition.c for the definition. */
 typedef struct PartitionDispatchData *PartitionDispatch;
 
 /*-----------------------
@@ -86,10 +58,13 @@ typedef struct PartitionDispatchData *PartitionDispatch;
  *								element of this array has the index into the
  *								corresponding partition in partitions array.
  * num_subplan_partition_offsets  Length of 'subplan_partition_offsets' array
- * partition_tuple_slot			TupleTableSlot to be used to manipulate any
- *								given leaf partition's rowtype after that
- *								partition is chosen for insertion by
- *								tuple-routing.
+ * partition_tuple_slots		Array of TupleTableSlot objects; if non-NULL,
+ *								contains one entry for every leaf partition,
+ *								of which only those of the leaf partitions
+ *								whose attribute numbers differ from the root
+ *								parent have a non-NULL value.  NULL if all of
+ *								the partitions encountered by a given command
+ *								happen to have same rowtype as the root parent
  * root_tuple_slot				TupleTableSlot to be used to transiently hold
  *								copy of a tuple that's being moved across
  *								partitions in the root partitioned table's
@@ -108,7 +83,7 @@ typedef struct PartitionTupleRouting
 	bool	   *child_parent_map_not_required;
 	int		   *subplan_partition_offsets;
 	int			num_subplan_partition_offsets;
-	TupleTableSlot *partition_tuple_slot;
+	TupleTableSlot **partition_tuple_slots;
 	TupleTableSlot *root_tuple_slot;
 } PartitionTupleRouting;
 
@@ -216,16 +191,10 @@ extern void ExecInitRoutingInfo(ModifyTableState *mtstate,
 extern void ExecSetupChildParentMapForLeaf(PartitionTupleRouting *proute);
 extern TupleConversionMap *TupConvMapForLeaf(PartitionTupleRouting *proute,
 				  ResultRelInfo *rootRelInfo, int leaf_index);
-extern HeapTuple ConvertPartitionTupleSlot(TupleConversionMap *map,
-						  HeapTuple tuple,
-						  TupleTableSlot *new_slot,
-						  TupleTableSlot **p_my_slot,
-						  bool shouldFree);
 extern void ExecCleanupTupleRouting(ModifyTableState *mtstate,
 						PartitionTupleRouting *proute);
 extern PartitionPruneState *ExecCreatePartitionPruneState(PlanState *planstate,
 							  PartitionPruneInfo *partitionpruneinfo);
-extern void ExecDestroyPartitionPruneState(PartitionPruneState *prunestate);
 extern Bitmapset *ExecFindMatchingSubPlans(PartitionPruneState *prunestate);
 extern Bitmapset *ExecFindInitialMatchingSubPlans(PartitionPruneState *prunestate,
 								int nsubplans);

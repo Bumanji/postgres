@@ -116,6 +116,14 @@ main(int argc, char *argv[])
 	 * startup, to avoid entanglements with code that might save a getenv()
 	 * result pointer.
 	 */
+	/*
+	 * 记住最初给定的argv[]数组的物理位置，ps显示的时候可能会用到。在有些平台上，argv[]的存储
+	 * 空间会被覆盖，用来设置ps的进程title。这些情况下，save_ps_display_args会生产并返回argv[]
+	 * 数组的一个新的拷贝。
+	 * 
+	 * save_ps_display_args也可能移动环境变量字符串来产生额外的空间。所以，应该在启动时尽早
+	 * 完成，以防止与保存getenv()结果指针的代码产生什么瓜葛。
+	 */
 	argv = save_ps_display_args(argc, argv);
 
 	/*
@@ -124,6 +132,12 @@ main(int argc, char *argv[])
 	 * Code after this point is allowed to use elog/ereport, though
 	 * localization of messages may not work right away, and messages won't go
 	 * anywhere but stderr until GUC settings get loaded.
+	 */
+	/*
+	 * 点亮核心子系统：错误处理和内存管理
+	 *
+	 * 在此之后的代码可以使用elog/ereport，尽管消息本地化可能不能正常工作，并且在GUC设置
+	 * 加载之前，消息只能输出到stderr。
 	 */
 	MemoryContextInit();
 
@@ -134,6 +148,11 @@ main(int argc, char *argv[])
 	 * available to fill pg_control during initdb.  LC_MESSAGES will get set
 	 * later during GUC option processing, but we set it here to allow startup
 	 * error messages to be localized.
+	 */
+	/*
+	 * 从环境中设置本地信息。注意如果数据库已初始化，那么LC_CTYPE和LC_COLLATE之后会被
+	 * pg_control覆盖。我们在这里设置它们，这样在initdb时就可以满足pg_control。LC_MESSAGES
+	 * 在之后处理GUC选项的时候设置，但我们在这里设置一下，这样可以本地化启动出错的消息。
 	 */
 
 	set_pglocale_pgservice(argv[0], PG_TEXTDOMAIN("postgres"));
@@ -172,6 +191,9 @@ main(int argc, char *argv[])
 	 * We keep these set to "C" always, except transiently in pg_locale.c; see
 	 * that file for explanations.
 	 */
+	/*
+	 * 除了pg_locale.c暂时不同之外，我们总是将以下的变量设为"C"；参见pg_locale.c文件查看详情。
+	 */
 	init_locale("LC_MONETARY", LC_MONETARY, "C");
 	init_locale("LC_NUMERIC", LC_NUMERIC, "C");
 	init_locale("LC_TIME", LC_TIME, "C");
@@ -181,6 +203,10 @@ main(int argc, char *argv[])
 	 * environment, remove any LC_ALL setting, so that the environment
 	 * variables installed by pg_perm_setlocale have force.
 	 */
+	/*
+	 * 到现在为止，我们尽可能多地从本地环境获取变量，删除LC_ALL的任何设定，这样pg_perm_setlocale
+	 * 安装的环境变量可以生效。
+	 */
 	unsetenv("LC_ALL");
 
 	check_strxfrm_bug();
@@ -188,6 +214,9 @@ main(int argc, char *argv[])
 	/*
 	 * Catch standard options before doing much else, in particular before we
 	 * insist on not being root.
+	 */
+	/*
+	 * 在做其他事情之前先处理标准选项，特别是要在确定非root用户运行本程序之前。
 	 */
 	if (argc > 1)
 	{
@@ -212,6 +241,13 @@ main(int argc, char *argv[])
 		 * reduces the risk that we might misinterpret some other mode's -C
 		 * switch as being the postmaster/postgres one.
 		 */
+		/*
+		 * 在上述选项之外，我们允许以root权限运行"--describe-config"和"-C var"选项。
+		 * 这对安全性来说是合理的，因为这2个选项只有只读的操作。-C很重要因为pg_ctl会试图
+		 * 在还持有管理员权限的时候调用它。注意，虽然-C可以在argv的任意位置，但如果你想忽略
+		 * root检查，你必须将它放在第一个。这就减少了将其他模式的-C选项当成postmaster/postgres
+		 * 选项的风险。
+		 */
 		if (strcmp(argv[1], "--describe-config") == 0)
 			do_check_root = false;
 		else if (argc > 2 && strcmp(argv[1], "-C") == 0)
@@ -222,11 +258,17 @@ main(int argc, char *argv[])
 	 * Make sure we are not running as root, unless it's safe for the selected
 	 * option.
 	 */
+	/*
+	 * 确认我们没有用root用户运行，除非选项是安全的。
+	 */
 	if (do_check_root)
 		check_root(progname);
 
 	/*
 	 * Dispatch to one of various subprograms depending on first argument.
+	 */
+	/*
+	 * 根据第一个参数，执行不同的代码。
 	 */
 
 #ifdef EXEC_BACKEND

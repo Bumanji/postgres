@@ -11,6 +11,19 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * rel.h
+ *	  POSTGRES关系描述符（也就是relcache项）的定义。
+ *
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ * src/include/utils/rel.h
+ *
+ *-------------------------------------------------------------------------
+ */
 #ifndef REL_H
 #define REL_H
 
@@ -32,11 +45,15 @@
  * LockRelId and LockInfo really belong to lmgr.h, but it's more convenient
  * to declare them here so we can have a LockInfoData field in a Relation.
  */
+/*
+ * LockRelId和LockInfo实际上属于lmgr.h，但在这里定义更方便，这样我们就可以在一个Relation
+ * 结构体中定义一个LockInfoData的域。
+ */
 
 typedef struct LockRelId
 {
-	Oid			relId;			/* a relation identifier */
-	Oid			dbId;			/* a database identifier */
+	Oid			relId;			/* a relation identifier *//* 关系标识符 */
+	Oid			dbId;			/* a database identifier *//* 数据库标识符 */
 } LockRelId;
 
 typedef struct LockInfoData
@@ -49,15 +66,19 @@ typedef LockInfoData *LockInfo;
 /*
  * Here are the contents of a relation cache entry.
  */
+/*
+ * 这里是关系缓存项的内容。
+ */
 
 typedef struct RelationData
 {
-	RelFileNode rd_node;		/* relation physical identifier */
+	RelFileNode rd_node;		/* relation physical identifier *//* 关系的物理标识符 */
 	/* use "struct" here to avoid needing to include smgr.h: */
-	struct SMgrRelationData *rd_smgr;	/* cached file handle, or NULL */
-	int			rd_refcnt;		/* reference count */
-	BackendId	rd_backend;		/* owning backend id, if temporary relation */
-	bool		rd_islocaltemp; /* rel is a temp rel of this session */
+	/* 这里使用"struct"来避免include smgr.h: */
+	struct SMgrRelationData *rd_smgr;	/* cached file handle, or NULL *//* 缓存的文件句柄，或者为NULL */
+	int			rd_refcnt;		/* reference count *//* 引用计数 */
+	BackendId	rd_backend;		/* owning backend id, if temporary relation *//* 如果是临时关系的话，则为拥有的后台进程id */
+	bool		rd_islocaltemp; /* rel is a temp rel of this session *//* 关系是当前会话的临时关系 */
 	bool		rd_isnailed;	/* rel is nailed in cache */
 	bool		rd_isvalid;		/* relcache entry is valid */
 	char		rd_indexvalid;	/* state of rd_indexlist: 0 = not valid, 1 =
@@ -202,12 +223,13 @@ typedef struct RelationData
  * The per-FK-column arrays can be fixed-size because we allow at most
  * INDEX_MAX_KEYS columns in a foreign key constraint.
  *
- * Currently, we only cache fields of interest to the planner, but the
- * set of fields could be expanded in future.
+ * Currently, we mostly cache fields of interest to the planner, but the set
+ * of fields has already grown the constraint OID for other uses.
  */
 typedef struct ForeignKeyCacheInfo
 {
 	NodeTag		type;
+	Oid			conoid;			/* oid of the constraint itself */
 	Oid			conrelid;		/* relation constrained by the foreign key */
 	Oid			confrelid;		/* relation referenced by the foreign key */
 	int			nkeys;			/* number of columns in the foreign key */

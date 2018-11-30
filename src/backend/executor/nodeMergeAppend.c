@@ -76,12 +76,6 @@ ExecInitMergeAppend(MergeAppend *node, EState *estate, int eflags)
 	Assert(!(eflags & (EXEC_FLAG_BACKWARD | EXEC_FLAG_MARK)));
 
 	/*
-	 * Lock the non-leaf tables in the partition tree controlled by this node.
-	 * It's a no-op for non-partitioned parent tables.
-	 */
-	ExecLockNonLeafAppendTables(node->partitioned_rels, estate);
-
-	/*
 	 * create new MergeAppendState for our node
 	 */
 	mergestate->ps.plan = (Plan *) node;
@@ -338,7 +332,10 @@ heap_compare_slots(Datum a, Datum b, void *arg)
 									  datum2, isNull2,
 									  sortKey);
 		if (compare != 0)
-			return -compare;
+		{
+			INVERT_COMPARE_RESULT(compare);
+			return compare;
+		}
 	}
 	return 0;
 }
@@ -369,12 +366,6 @@ ExecEndMergeAppend(MergeAppendState *node)
 	 */
 	for (i = 0; i < nplans; i++)
 		ExecEndNode(mergeplans[i]);
-
-	/*
-	 * release any resources associated with run-time pruning
-	 */
-	if (node->ms_prune_state)
-		ExecDestroyPartitionPruneState(node->ms_prune_state);
 }
 
 void

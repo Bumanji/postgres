@@ -274,9 +274,7 @@ InitPostmasterChild(void)
 {
 	IsUnderPostmaster = true;	/* we are a postmaster subprocess now */
 
-	MyProcPid = getpid();		/* reset MyProcPid */
-
-	MyStartTime = time(NULL);	/* set our start time in case we call elog */
+	InitProcessGlobals();
 
 	/*
 	 * make sure stderr is in binary mode before anything can possibly be
@@ -321,9 +319,7 @@ InitStandaloneProcess(const char *argv0)
 {
 	Assert(!IsPostmasterEnvironment);
 
-	MyProcPid = getpid();		/* reset MyProcPid */
-
-	MyStartTime = time(NULL);	/* set our start time in case we call elog */
+	InitProcessGlobals();
 
 	/* Initialize process-local latch support */
 	InitializeLatchSupport();

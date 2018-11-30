@@ -292,7 +292,7 @@ llvm_compile_expr(ExprState *state)
 						if (!desc &&
 							is &&
 							is->ps_ResultTupleSlot &&
-							is->ps_ResultTupleSlot->tts_fixedTupleDescriptor)
+							TTS_FIXED(is->ps_ResultTupleSlot))
 							desc = is->ps_ResultTupleSlot->tts_tupleDescriptor;
 					}
 					else if (opcode == EEOP_OUTER_FETCHSOME)
@@ -304,7 +304,7 @@ llvm_compile_expr(ExprState *state)
 						if (!desc &&
 							os &&
 							os->ps_ResultTupleSlot &&
-							os->ps_ResultTupleSlot->tts_fixedTupleDescriptor)
+							TTS_FIXED(os->ps_ResultTupleSlot))
 							desc = os->ps_ResultTupleSlot->tts_tupleDescriptor;
 					}
 					else
@@ -324,7 +324,7 @@ llvm_compile_expr(ExprState *state)
 										  "");
 					LLVMBuildCondBr(b,
 									LLVMBuildICmp(b, LLVMIntUGE, v_nvalid,
-												  l_int32_const(op->d.fetch.last_var),
+												  l_int16_const(op->d.fetch.last_var),
 												  ""),
 									opblocks[i + 1], b_fetch);
 
@@ -2557,7 +2557,7 @@ llvm_compile_expr(ExprState *state)
 	llvm_leave_fatal_on_oom();
 
 	INSTR_TIME_SET_CURRENT(endtime);
-	INSTR_TIME_ACCUM_DIFF(context->base.generation_counter,
+	INSTR_TIME_ACCUM_DIFF(context->base.instr.generation_counter,
 						  endtime, starttime);
 
 	return true;

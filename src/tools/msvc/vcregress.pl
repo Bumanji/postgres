@@ -10,6 +10,9 @@ use Cwd;
 use File::Basename;
 use File::Copy;
 use File::Find ();
+use File::Path qw(rmtree);
+use File::Spec;
+BEGIN  { use lib File::Spec->rel2abs(dirname(__FILE__)); }
 
 use Install qw(Install);
 
@@ -205,6 +208,7 @@ sub tap_check
 
 	$ENV{TESTDIR} = "$dir";
 
+	rmtree('tmp_check');
 	system(@args);
 	my $status = $? >> 8;
 	return $status;

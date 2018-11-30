@@ -804,6 +804,27 @@ sub promote
 	return;
 }
 
+=pod
+
+=item $node->logrotate()
+
+Wrapper for pg_ctl logrotate
+
+=cut
+
+sub logrotate
+{
+	my ($self)  = @_;
+	my $port    = $self->port;
+	my $pgdata  = $self->data_dir;
+	my $logfile = $self->logfile;
+	my $name    = $self->name;
+	print "### Rotating log in node \"$name\"\n";
+	TestLib::system_or_bail('pg_ctl', '-D', $pgdata, '-l', $logfile,
+		'logrotate');
+	return;
+}
+
 # Internal routine to enable streaming replication on a standby node.
 sub enable_streaming
 {
@@ -1348,9 +1369,18 @@ sub poll_query_until
 		$attempts++;
 	}
 
-	# The query result didn't change in 180 seconds. Give up. Print the stderr
-	# from the last attempt, hopefully that's useful for debugging.
-	diag $stderr;
+	# The query result didn't change in 180 seconds. Give up. Print the
+	# output from the last attempt, hopefully that's useful for debugging.
+	chomp($stderr);
+	$stderr =~ s/\r//g if $TestLib::windows_os;
+	diag qq(poll_query_until timed out executing this query:
+$query
+expecting this output:
+$expected
+last actual query output:
+$stdout
+with stderr:
+$stderr);
 	return 0;
 }
 

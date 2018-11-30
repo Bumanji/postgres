@@ -15,6 +15,23 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * hash.c
+ *	  Margo Seltzer的哈希包的postgres实现。
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
+ * IDENTIFICATION
+ *	  src/backend/access/hash/hash.c
+ *
+ * 注意
+ *	  本文件只包含公共接口。
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #include "postgres.h"
 
@@ -32,11 +49,12 @@
 
 
 /* Working state for hashbuild and its callback */
+/* hashbuild及其回调的工作状态 */
 typedef struct
 {
-	HSpool	   *spool;			/* NULL if not using spooling */
+	HSpool	   *spool;			/* 如果没有使用spooling的话则为NULL */
 	double		indtuples;		/* # tuples accepted into index */
-	Relation	heapRel;		/* heap relation descriptor */
+	Relation	heapRel;		/* 堆关系描述符 */
 } HashBuildState;
 
 static void hashbuildCallback(Relation index,
