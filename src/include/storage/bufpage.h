@@ -11,6 +11,19 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * bufpage.h
+ *   POSTGRES标准缓存页定义。
+ *
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ * src/include/storage/bufpage.h
+ *
+ *-------------------------------------------------------------------------
+ */
 #ifndef BUFPAGE_H
 #define BUFPAGE_H
 
@@ -45,6 +58,55 @@
  * pd_upper.
  *
  * all blocks written out by an access method must be disk pages.
+ *
+ * EXCEPTIONS:
+ *
+ * obviously, a page is not formatted before it is initialized by
+ * a call to PageInit.
+ *
+ * NOTES:
+ *
+ * linp1..N form an ItemId array.  ItemPointers point into this array
+ * rather than pointing directly to a tuple.  Note that OffsetNumbers
+ * conventionally start at 1, not 0.
+ *
+ * tuple1..N are added "backwards" on the page.  because a tuple's
+ * ItemPointer points to its ItemId entry rather than its actual
+ * byte-offset position, tuples can be physically shuffled on a page
+ * whenever the need arises.
+ *
+ * AM-generic per-page information is kept in PageHeaderData.
+ *
+ * AM-specific per-page data (if any) is kept in the area marked "special
+ * space"; each AM has an "opaque" structure defined somewhere that is
+ * stored as the page trailer.  an access method should always
+ * initialize its pages with PageInit and then set its own opaque
+ * fields.
+ */
+/*
+ * postgres磁盘页是一个建立在postgres磁盘块之上的抽象层（磁盘块就是一个i/o单元，
+ * 参见block.h）。
+ *
+ * 特别的，因为一个磁盘块可以被解码，所以一个postgres磁盘页总是如下格式的页：
+ *
+ * +----------------+---------------------------------+
+ * | PageHeaderData | linp1 linp2 linp3 ...           |
+ * +-----------+----+---------------------------------+
+ * | ... linpN |									  |
+ * +-----------+--------------------------------------+
+ * |		   ^ pd_lower							  |
+ * |												  |
+ * |			 v pd_upper							  |
+ * +-------------+------------------------------------+
+ * |			 | tupleN ...                         |
+ * +-------------+------------------+-----------------+
+ * |	   ... tuple3 tuple2 tuple1 | "special space" |
+ * +--------------------------------+-----------------+
+ *									^ pd_special
+ *
+ * 如果pd_lower和pd_upper之间不能再增加东西，那么就称这个页已经满了。
+ *
+ * 访问方法模块写的所有块都必须是磁盘页格式。
  *
  * EXCEPTIONS:
  *
