@@ -108,29 +108,23 @@
  *
  * 访问方法模块写的所有块都必须是磁盘页格式。
  *
- * EXCEPTIONS:
+ * 例外：
  *
- * obviously, a page is not formatted before it is initialized by
- * a call to PageInit.
+ * 显然，在调用PageInit之前，页不会被格式化。
  *
- * NOTES:
+ * 注意：
  *
- * linp1..N form an ItemId array.  ItemPointers point into this array
- * rather than pointing directly to a tuple.  Note that OffsetNumbers
- * conventionally start at 1, not 0.
+ * linp1..N形成了一个ItemId数组。 array.ItemPointers指向这个数组而不是直接指向
+ * 一个元组。注意OffsetNumbers通常从1开始，而不是从0开始。
  *
- * tuple1..N are added "backwards" on the page.  because a tuple's
- * ItemPointer points to its ItemId entry rather than its actual
- * byte-offset position, tuples can be physically shuffled on a page
- * whenever the need arises.
+ * tuple1..N“从后向前”添加到页中。因为一个元组的ItemPointer指向它的ItemId项，而不是它
+ * 实际的字节偏移位置，所以页中的元组如果需要的话可以在物理上移动。
  *
- * AM-generic per-page information is kept in PageHeaderData.
+ * 访问方法公用的每个页的信息保存在PageHeaderData中。
  *
- * AM-specific per-page data (if any) is kept in the area marked "special
- * space"; each AM has an "opaque" structure defined somewhere that is
- * stored as the page trailer.  an access method should always
- * initialize its pages with PageInit and then set its own opaque
- * fields.
+ * 特定访问方法的每页数据（如果有的话）保存在标记为“特殊空间”的地方；每个访问方法定义
+ * 了一个“特别”的结构体放在页的末尾。访问方法应该调用PageInit来初始化它的页，然后设定
+ * 它的特别的域。
  */
 
 typedef Pointer Page;
