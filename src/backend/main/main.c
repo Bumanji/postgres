@@ -288,16 +288,16 @@ main(int argc, char *argv[])
 #endif
 
 	if (argc > 1 && strcmp(argv[1], "--boot") == 0)
-		AuxiliaryProcessMain(argc, argv);	/* does not return */
+		AuxiliaryProcessMain(argc, argv);	/* does not return *//* 不返回 */
 	else if (argc > 1 && strcmp(argv[1], "--describe-config") == 0)
-		GucInfoMain();			/* does not return */
+		GucInfoMain();			/* does not return *//* 不返回 */
 	else if (argc > 1 && strcmp(argv[1], "--single") == 0)
 		PostgresMain(argc, argv,
-					 NULL,		/* no dbname */
-					 strdup(get_user_name_or_exit(progname)));	/* does not return */
+					 NULL,		/* no dbname *//* 没有数据库名称 */
+					 strdup(get_user_name_or_exit(progname)));	/* does not return *//* 不返回 */
 	else
-		PostmasterMain(argc, argv); /* does not return */
-	abort();					/* should not get here */
+		PostmasterMain(argc, argv); /* does not return *//* 不返回 */
+	abort();					/* should not get here *//* 不应该执行到这里 */
 }
 
 
