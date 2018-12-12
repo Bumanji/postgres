@@ -11,6 +11,19 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * nodes.h
+ *	  标记节点的定义。
+ *
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ * src/include/nodes/nodes.h
+ *
+ *-------------------------------------------------------------------------
+ */
 #ifndef NODES_H
 #define NODES_H
 
