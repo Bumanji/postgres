@@ -391,9 +391,10 @@ AC_SUBST(SUN_STUDIO_CC)
 PGAC_ARG_BOOL(with, llvm, no, [build with LLVM based JIT support],
               [AC_DEFINE([USE_LLVM], 1, [Define to 1 to build with LLVM based JIT support. (--with-llvm)])])
 AC_SUBST(with_llvm)
-if test "$with_llvm" = yes ; then
-   PGAC_LLVM_SUPPORT()
-fi
+dnl must use AS_IF here, else AC_REQUIRES inside PGAC_LLVM_SUPPORT malfunctions
+AS_IF([test "$with_llvm" = yes], [
+  PGAC_LLVM_SUPPORT()
+]) # fi
 
 
 unset CFLAGS
@@ -1020,7 +1021,6 @@ AC_SUBST(install_bin)
 
 PGAC_PATH_PROGS(TAR, tar)
 AC_PROG_LN_S
-AC_PROG_AWK
 AC_PROG_MKDIR_P
 # When Autoconf chooses install-sh as mkdir -p program it tries to generate
 # a relative path to it in each makefile where it substitutes it. This clashes
@@ -1295,6 +1295,7 @@ AC_HEADER_STDBOOL
 
 AC_CHECK_HEADERS(m4_normalize([
 	atomic.h
+	copyfile.h
 	crypt.h
 	fp_class.h
 	getopt.h
@@ -1602,6 +1603,7 @@ LIBS=`echo "$LIBS" | sed -e 's/-ledit//g' -e 's/-lreadline//g'`
 AC_CHECK_FUNCS(m4_normalize([
 	cbrt
 	clock_gettime
+	copyfile
 	fdatasync
 	getifaddrs
 	getpeerucred
@@ -1640,10 +1642,11 @@ esac
 # posix_fadvise() is a no-op on Solaris, so don't incur function overhead
 # by calling it, 2009-04-02
 # http://src.opensolaris.org/source/xref/onnv/onnv-gate/usr/src/lib/libc/port/gen/posix_fadvise.c
-if test "$PORTNAME" != "solaris"; then
+dnl must use AS_IF here, else AC_REQUIRES inside AC_CHECK_DECLS malfunctions
+AS_IF([test "$PORTNAME" != "solaris"], [
 AC_CHECK_FUNCS(posix_fadvise)
 AC_CHECK_DECLS(posix_fadvise, [], [], [#include <fcntl.h>])
-fi
+]) # fi
 
 AC_CHECK_DECLS(fdatasync, [], [], [#include <unistd.h>])
 AC_CHECK_DECLS([strlcat, strlcpy, strnlen])
@@ -1652,14 +1655,11 @@ AC_CHECK_DECLS(F_FULLFSYNC, [], [], [#include <fcntl.h>])
 
 AC_CHECK_DECLS([RTLD_GLOBAL, RTLD_NOW], [], [], [#include <dlfcn.h>])
 
-HAVE_IPV6=no
 AC_CHECK_TYPE([struct sockaddr_in6],
-        [AC_DEFINE(HAVE_IPV6, 1, [Define to 1 if you have support for IPv6.])
-         HAVE_IPV6=yes],
+        [AC_DEFINE(HAVE_IPV6, 1, [Define to 1 if you have support for IPv6.])],
         [],
 [$ac_includes_default
 #include <netinet/in.h>])
-AC_SUBST(HAVE_IPV6)
 
 AC_CACHE_CHECK([for PS_STRINGS], [pgac_cv_var_PS_STRINGS],
 [AC_LINK_IFELSE([AC_LANG_PROGRAM(
@@ -1701,6 +1701,8 @@ AC_REPLACE_FUNCS(m4_normalize([
 	getrusage
 	inet_aton
 	mkdtemp
+	pread
+	pwrite
 	random
 	rint
 	srandom
@@ -1828,6 +1830,10 @@ if test "$with_icu" = yes; then
         [AC_MSG_ERROR([header file <unicode/ucol.h> is required for ICU])])
 
   CPPFLAGS=$ac_save_CPPFLAGS
+fi
+
+if test "$with_llvm" = yes; then
+  PGAC_CHECK_LLVM_FUNCTIONS()
 fi
 
 # Lastly, restore full LIBS list and check for readline/libedit symbols

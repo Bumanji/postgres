@@ -23,6 +23,7 @@
 #include "funcapi.h"
 #include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
 
 
 /*
@@ -42,16 +43,16 @@ pg_partition_tree(PG_FUNCTION_ARGS)
 	FuncCallContext *funcctx;
 	ListCell  **next;
 
-	/* Only allow relation types that can appear in partition trees. */
+	if (!SearchSysCacheExists1(RELOID, ObjectIdGetDatum(rootrelid)))
+		PG_RETURN_NULL();
+
+	/* Return NULL for relation types that cannot appear in partition trees */
 	if (relkind != RELKIND_RELATION &&
 		relkind != RELKIND_FOREIGN_TABLE &&
 		relkind != RELKIND_INDEX &&
 		relkind != RELKIND_PARTITIONED_TABLE &&
 		relkind != RELKIND_PARTITIONED_INDEX)
-		ereport(ERROR,
-				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("\"%s\" is not a table, a foreign table, or an index",
-						get_rel_name(rootrelid))));
+		PG_RETURN_NULL();
 
 	/* stuff done only on the first call of the function */
 	if (SRF_IS_FIRSTCALL())
@@ -72,7 +73,7 @@ pg_partition_tree(PG_FUNCTION_ARGS)
 		 */
 		partitions = find_all_inheritors(rootrelid, AccessShareLock, NULL);
 
-		tupdesc = CreateTemplateTupleDesc(PG_PARTITION_TREE_COLS, false);
+		tupdesc = CreateTemplateTupleDesc(PG_PARTITION_TREE_COLS);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "relid",
 						   REGCLASSOID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "parentid",

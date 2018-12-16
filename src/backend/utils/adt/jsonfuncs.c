@@ -3658,6 +3658,12 @@ populate_recordset_worker(FunctionCallInfo fcinfo, const char *funcname,
 	if (PG_ARGISNULL(json_arg_num))
 		PG_RETURN_NULL();
 
+	/*
+	 * Forcibly update the cached tupdesc, to ensure we have the right tupdesc
+	 * to return even if the JSON contains no rows.
+	 */
+	update_cached_tupdesc(&cache->c.io.composite, cache->fn_mcxt);
+
 	state = palloc0(sizeof(PopulateRecordsetState));
 
 	/* make tuplestore in a sufficiently long-lived memory context */
@@ -4987,7 +4993,7 @@ parse_jsonb_index_flags(Jsonb *jb)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("flag array element is not a string"),
-					 errhint("Possible values are: \"string\", \"numeric\", \"boolean\", \"key\", and \"all\"")));
+					 errhint("Possible values are: \"string\", \"numeric\", \"boolean\", \"key\", and \"all\".")));
 
 		if (v.val.string.len == 3 &&
 			pg_strncasecmp(v.val.string.val, "all", 3) == 0)
@@ -5009,7 +5015,7 @@ parse_jsonb_index_flags(Jsonb *jb)
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("wrong flag in flag array: \"%s\"",
 							pnstrdup(v.val.string.val, v.val.string.len)),
-					 errhint("Possible values are: \"string\", \"numeric\", \"boolean\", \"key\", and \"all\"")));
+					 errhint("Possible values are: \"string\", \"numeric\", \"boolean\", \"key\", and \"all\".")));
 	}
 
 	/* expect end of array now */

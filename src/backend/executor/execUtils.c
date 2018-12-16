@@ -144,7 +144,6 @@ CreateExecutorState(void)
 	estate->es_tupleTable = NIL;
 
 	estate->es_processed = 0;
-	estate->es_lastoid = InvalidOid;
 
 	estate->es_top_eflags = 0;
 	estate->es_instrument = 0;
@@ -451,9 +450,36 @@ ExecAssignExprContext(EState *estate, PlanState *planstate)
 TupleDesc
 ExecGetResultType(PlanState *planstate)
 {
-	TupleTableSlot *slot = planstate->ps_ResultTupleSlot;
+	return planstate->ps_ResultTupleDesc;
+}
 
-	return slot->tts_tupleDescriptor;
+/*
+ * ExecGetResultSlotOps - information about node's type of result slot
+ */
+const TupleTableSlotOps *
+ExecGetResultSlotOps(PlanState *planstate, bool *isfixed)
+{
+	if (planstate->resultopsset && planstate->resultops)
+	{
+		if (isfixed)
+			*isfixed = planstate->resultopsfixed;
+		return planstate->resultops;
+	}
+
+	if (isfixed)
+	{
+		if (planstate->resultopsset)
+			*isfixed = planstate->resultopsfixed;
+		else if (planstate->ps_ResultTupleSlot)
+			*isfixed = TTS_FIXED(planstate->ps_ResultTupleSlot);
+		else
+			*isfixed = false;
+	}
+
+	if (!planstate->ps_ResultTupleSlot)
+		return &TTSOpsVirtual;
+
+	return planstate->ps_ResultTupleSlot->tts_ops;
 }
 
 
@@ -494,9 +520,23 @@ ExecConditionalAssignProjectionInfo(PlanState *planstate, TupleDesc inputDesc,
 							  planstate->plan->targetlist,
 							  varno,
 							  inputDesc))
+	{
 		planstate->ps_ProjInfo = NULL;
+		planstate->resultopsset = planstate->scanopsset;
+		planstate->resultopsfixed = planstate->scanopsfixed;
+		planstate->resultops = planstate->scanops;
+	}
 	else
+	{
+		if (!planstate->ps_ResultTupleSlot)
+		{
+			ExecInitResultSlot(planstate, &TTSOpsVirtual);
+			planstate->resultops = &TTSOpsVirtual;
+			planstate->resultopsfixed = true;
+			planstate->resultopsset = true;
+		}
 		ExecAssignProjectionInfo(planstate, inputDesc);
+	}
 }
 
 static bool
@@ -504,7 +544,6 @@ tlist_matches_tupdesc(PlanState *ps, List *tlist, Index varno, TupleDesc tupdesc
 {
 	int			numattrs = tupdesc->natts;
 	int			attrno;
-	bool		hasoid;
 	ListCell   *tlist_item = list_head(tlist);
 
 	/* Check the tlist attributes */
@@ -548,14 +587,6 @@ tlist_matches_tupdesc(PlanState *ps, List *tlist, Index varno, TupleDesc tupdesc
 
 	if (tlist_item)
 		return false;			/* tlist too long */
-
-	/*
-	 * If the plan context requires a particular hasoid setting, then that has
-	 * to match, too.
-	 */
-	if (ExecContextForcesOids(ps, &hasoid) &&
-		hasoid != tupdesc->tdhasoid)
-		return false;
 
 	return true;
 }
@@ -609,7 +640,9 @@ ExecAssignScanType(ScanState *scanstate, TupleDesc tupDesc)
  * ----------------
  */
 void
-ExecCreateScanSlotFromOuterPlan(EState *estate, ScanState *scanstate)
+ExecCreateScanSlotFromOuterPlan(EState *estate,
+								ScanState *scanstate,
+								const TupleTableSlotOps *tts_ops)
 {
 	PlanState  *outerPlan;
 	TupleDesc	tupDesc;
@@ -617,7 +650,7 @@ ExecCreateScanSlotFromOuterPlan(EState *estate, ScanState *scanstate)
 	outerPlan = outerPlanState(scanstate);
 	tupDesc = ExecGetResultType(outerPlan);
 
-	ExecInitScanTupleSlot(estate, scanstate, tupDesc);
+	ExecInitScanTupleSlot(estate, scanstate, tupDesc, tts_ops);
 }
 
 /* ----------------------------------------------------------------

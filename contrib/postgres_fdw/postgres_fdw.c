@@ -1229,11 +1229,9 @@ postgresGetForeignPlan(PlannerInfo *root,
 
 		/*
 		 * Ensure that the outer plan produces a tuple whose descriptor
-		 * matches our scan tuple slot. This is safe because all scans and
-		 * joins support projection, so we never need to insert a Result node.
-		 * Also, remove the local conditions from outer plan's quals, lest
-		 * they will be evaluated twice, once by the local plan and once by
-		 * the scan.
+		 * matches our scan tuple slot.  Also, remove the local conditions
+		 * from outer plan's quals, lest they be evaluated twice, once by the
+		 * local plan and once by the scan.
 		 */
 		if (outer_plan)
 		{
@@ -1246,23 +1244,42 @@ postgresGetForeignPlan(PlannerInfo *root,
 			 */
 			Assert(!IS_UPPER_REL(foreignrel));
 
-			outer_plan->targetlist = fdw_scan_tlist;
-
+			/*
+			 * First, update the plan's qual list if possible.  In some cases
+			 * the quals might be enforced below the topmost plan level, in
+			 * which case we'll fail to remove them; it's not worth working
+			 * harder than this.
+			 */
 			foreach(lc, local_exprs)
 			{
-				Join	   *join_plan = (Join *) outer_plan;
 				Node	   *qual = lfirst(lc);
 
 				outer_plan->qual = list_delete(outer_plan->qual, qual);
 
 				/*
 				 * For an inner join the local conditions of foreign scan plan
-				 * can be part of the joinquals as well.
+				 * can be part of the joinquals as well.  (They might also be
+				 * in the mergequals or hashquals, but we can't touch those
+				 * without breaking the plan.)
 				 */
-				if (join_plan->jointype == JOIN_INNER)
-					join_plan->joinqual = list_delete(join_plan->joinqual,
-													  qual);
+				if (IsA(outer_plan, NestLoop) ||
+					IsA(outer_plan, MergeJoin) ||
+					IsA(outer_plan, HashJoin))
+				{
+					Join	   *join_plan = (Join *) outer_plan;
+
+					if (join_plan->jointype == JOIN_INNER)
+						join_plan->joinqual = list_delete(join_plan->joinqual,
+														  qual);
+				}
 			}
+
+			/*
+			 * Now fix the subplan's tlist --- this might result in inserting
+			 * a Result node atop the plan tree.
+			 */
+			outer_plan = change_plan_targetlist(outer_plan, fdw_scan_tlist,
+												best_path->path.parallel_safe);
 		}
 	}
 
@@ -2844,10 +2861,6 @@ estimate_path_cost_size(PlannerInfo *root,
 			 * strategy will be considered at remote side, thus for
 			 * simplicity, we put all startup related costs in startup_cost
 			 * and all finalization and run cost are added in total_cost.
-			 *
-			 * Also, core does not care about costing HAVING expressions and
-			 * adding that to the costs.  So similarly, here too we are not
-			 * considering remote and local conditions for costing.
 			 */
 
 			ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
@@ -2880,14 +2893,30 @@ estimate_path_cost_size(PlannerInfo *root,
 											input_rows, NULL);
 
 			/*
-			 * Number of rows expected from foreign server will be same as
-			 * that of number of groups.
+			 * Get the retrieved_rows and rows estimates.  If there are HAVING
+			 * quals, account for their selectivity.
 			 */
-			rows = retrieved_rows = numGroups;
+			if (root->parse->havingQual)
+			{
+				/* Factor in the selectivity of the remotely-checked quals */
+				retrieved_rows =
+					clamp_row_est(numGroups *
+								  clauselist_selectivity(root,
+														 fpinfo->remote_conds,
+														 0,
+														 JOIN_INNER,
+														 NULL));
+				/* Factor in the selectivity of the locally-checked quals */
+				rows = clamp_row_est(retrieved_rows * fpinfo->local_conds_sel);
+			}
+			else
+			{
+				rows = retrieved_rows = numGroups;
+			}
 
 			/*-----
 			 * Startup cost includes:
-			 *	  1. Startup cost for underneath input * relation
+			 *	  1. Startup cost for underneath input relation
 			 *	  2. Cost of performing aggregation, per cost_agg()
 			 *	  3. Startup cost for PathTarget eval
 			 *-----
@@ -2909,6 +2938,20 @@ estimate_path_cost_size(PlannerInfo *root,
 			run_cost += aggcosts.finalCost * numGroups;
 			run_cost += cpu_tuple_cost * numGroups;
 			run_cost += ptarget->cost.per_tuple * numGroups;
+
+			/* Accout for the eval cost of HAVING quals, if any */
+			if (root->parse->havingQual)
+			{
+				QualCost	remote_cost;
+
+				/* Add in the eval cost of the remotely-checked quals */
+				cost_qual_eval(&remote_cost, fpinfo->remote_conds, root);
+				startup_cost += remote_cost.startup;
+				run_cost += remote_cost.per_tuple * numGroups;
+				/* Add in the eval cost of the locally-checked quals */
+				startup_cost += fpinfo->local_conds_cost.startup;
+				run_cost += fpinfo->local_conds_cost.per_tuple * retrieved_rows;
+			}
 		}
 		else
 		{
@@ -3632,8 +3675,7 @@ build_remote_returning(Index rtindex, Relation rel, List *returningList)
 		if (IsA(var, Var) &&
 			var->varno == rtindex &&
 			var->varattno <= InvalidAttrNumber &&
-			var->varattno != SelfItemPointerAttributeNumber &&
-			var->varattno != ObjectIdAttributeNumber)
+			var->varattno != SelfItemPointerAttributeNumber)
 			continue;			/* don't need it */
 
 		if (tlist_member((Expr *) var, tlist))
@@ -3864,8 +3906,6 @@ init_returning_filter(PgFdwDirectModifyState *dmstate,
 				 */
 				if (attrno == SelfItemPointerAttributeNumber)
 					dmstate->ctidAttno = i;
-				else if (attrno == ObjectIdAttributeNumber)
-					dmstate->oidAttno = i;
 				else
 					Assert(false);
 				dmstate->hasSystemCols = true;
@@ -3947,11 +3987,12 @@ apply_returning_filter(PgFdwDirectModifyState *dmstate,
 	ExecStoreVirtualTuple(resultSlot);
 
 	/*
-	 * If we have any system columns to return, install them.
+	 * If we have any system columns to return, materialize a heap tuple in the
+	 * slot from column values set above and install system columns in that tuple.
 	 */
 	if (dmstate->hasSystemCols)
 	{
-		HeapTuple	resultTup = ExecMaterializeSlot(resultSlot);
+		HeapTuple	resultTup = ExecFetchSlotHeapTuple(resultSlot, true, NULL);
 
 		/* ctid */
 		if (dmstate->ctidAttno)
@@ -3960,15 +4001,6 @@ apply_returning_filter(PgFdwDirectModifyState *dmstate,
 
 			ctid = (ItemPointer) DatumGetPointer(old_values[dmstate->ctidAttno - 1]);
 			resultTup->t_self = *ctid;
-		}
-
-		/* oid */
-		if (dmstate->oidAttno)
-		{
-			Oid			oid = InvalidOid;
-
-			oid = DatumGetObjectId(old_values[dmstate->oidAttno - 1]);
-			HeapTupleSetOid(resultTup, oid);
 		}
 
 		/*
@@ -5507,6 +5539,22 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	if (!foreign_grouping_ok(root, grouped_rel, extra->havingQual))
 		return;
 
+	/*
+	 * Compute the selectivity and cost of the local_conds, so we don't have
+	 * to do it over again for each path.  (Currently we create just a single
+	 * path here, but in future it would be possible that we build more paths
+	 * such as pre-sorted paths as in postgresGetForeignPaths and
+	 * postgresGetForeignJoinPaths.)  The best we can do for these conditions
+	 * is to estimate selectivity on the basis of local statistics.
+	 */
+	fpinfo->local_conds_sel = clauselist_selectivity(root,
+													 fpinfo->local_conds,
+													 0,
+													 JOIN_INNER,
+													 NULL);
+
+	cost_qual_eval(&fpinfo->local_conds_cost, fpinfo->local_conds, root);
+
 	/* Estimate the cost of push down */
 	estimate_path_cost_size(root, grouped_rel, NIL, NIL, &rows,
 							&width, &startup_cost, &total_cost);
@@ -5555,7 +5603,6 @@ make_tuple_from_result_row(PGresult *res,
 	Datum	   *values;
 	bool	   *nulls;
 	ItemPointer ctid = NULL;
-	Oid			oid = InvalidOid;
 	ConversionLocation errpos;
 	ErrorContextCallback errcallback;
 	MemoryContext oldcontext;
@@ -5638,17 +5685,6 @@ make_tuple_from_result_row(PGresult *res,
 				ctid = (ItemPointer) DatumGetPointer(datum);
 			}
 		}
-		else if (i == ObjectIdAttributeNumber)
-		{
-			/* oid */
-			if (valstr != NULL)
-			{
-				Datum		datum;
-
-				datum = DirectFunctionCall1(oidin, CStringGetDatum(valstr));
-				oid = DatumGetObjectId(datum);
-			}
-		}
 		errpos.cur_attno = 0;
 
 		j++;
@@ -5692,12 +5728,6 @@ make_tuple_from_result_row(PGresult *res,
 	HeapTupleHeaderSetXmin(tuple->t_data, InvalidTransactionId);
 	HeapTupleHeaderSetCmin(tuple->t_data, InvalidTransactionId);
 
-	/*
-	 * If we have an OID to return, install it.
-	 */
-	if (OidIsValid(oid))
-		HeapTupleSetOid(tuple, oid);
-
 	/* Clean up */
 	MemoryContextReset(temp_context);
 
@@ -5726,8 +5756,6 @@ conversion_error_callback(void *arg)
 			attname = NameStr(attr->attname);
 		else if (errpos->cur_attno == SelfItemPointerAttributeNumber)
 			attname = "ctid";
-		else if (errpos->cur_attno == ObjectIdAttributeNumber)
-			attname = "oid";
 
 		relname = RelationGetRelationName(errpos->rel);
 	}

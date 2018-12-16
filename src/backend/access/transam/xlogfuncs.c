@@ -471,7 +471,7 @@ pg_walfile_name_offset(PG_FUNCTION_ARGS)
 	 * Construct a tuple descriptor for the result row.  This must match this
 	 * function's pg_proc entry!
 	 */
-	resultTupleDesc = CreateTemplateTupleDesc(2, false);
+	resultTupleDesc = CreateTemplateTupleDesc(2);
 	TupleDescInitEntry(resultTupleDesc, (AttrNumber) 1, "file_name",
 					   TEXTOID, -1, 0);
 	TupleDescInitEntry(resultTupleDesc, (AttrNumber) 2, "file_offset",
@@ -764,10 +764,10 @@ pg_promote(PG_FUNCTION_ARGS)
 
 		CHECK_FOR_INTERRUPTS();
 
-		WaitLatch(MyLatch,
-				  WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-				  1000L / WAITS_PER_SECOND,
-				  WAIT_EVENT_PROMOTE);
+		(void) WaitLatch(MyLatch,
+						 WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+						 1000L / WAITS_PER_SECOND,
+						 WAIT_EVENT_PROMOTE);
 	}
 
 	ereport(WARNING,

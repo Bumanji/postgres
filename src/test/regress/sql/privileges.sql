@@ -407,27 +407,27 @@ DELETE FROM atest5 WHERE two = 2; -- ok
 
 -- check inheritance cases
 SET SESSION AUTHORIZATION regress_priv_user1;
-CREATE TABLE atestp1 (f1 int, f2 int) WITH OIDS;
-CREATE TABLE atestp2 (fx int, fy int) WITH OIDS;
+CREATE TABLE atestp1 (f1 int, f2 int);
+CREATE TABLE atestp2 (fx int, fy int);
 CREATE TABLE atestc (fz int) INHERITS (atestp1, atestp2);
-GRANT SELECT(fx,fy,oid) ON atestp2 TO regress_priv_user2;
+GRANT SELECT(fx,fy,tableoid) ON atestp2 TO regress_priv_user2;
 GRANT SELECT(fx) ON atestc TO regress_priv_user2;
 
 SET SESSION AUTHORIZATION regress_priv_user2;
 SELECT fx FROM atestp2; -- ok
 SELECT fy FROM atestp2; -- ok
 SELECT atestp2 FROM atestp2; -- ok
-SELECT oid FROM atestp2; -- ok
+SELECT tableoid FROM atestp2; -- ok
 SELECT fy FROM atestc; -- fail
 
 SET SESSION AUTHORIZATION regress_priv_user1;
-GRANT SELECT(fy,oid) ON atestc TO regress_priv_user2;
+GRANT SELECT(fy,tableoid) ON atestc TO regress_priv_user2;
 
 SET SESSION AUTHORIZATION regress_priv_user2;
 SELECT fx FROM atestp2; -- still ok
 SELECT fy FROM atestp2; -- ok
 SELECT atestp2 FROM atestp2; -- ok
-SELECT oid FROM atestp2; -- ok
+SELECT tableoid FROM atestp2; -- ok
 
 -- privileges on functions, languages
 
@@ -935,6 +935,13 @@ ALTER DEFAULT PRIVILEGES FOR ROLE regress_priv_user1 REVOKE EXECUTE ON FUNCTIONS
 
 ALTER DEFAULT PRIVILEGES IN SCHEMA testns GRANT USAGE ON SCHEMAS TO regress_priv_user2; -- error
 
+--
+-- Testing blanket default grants is very hazardous since it might change
+-- the privileges attached to objects created by concurrent regression tests.
+-- To avoid that, be sure to revoke the privileges again before committing.
+--
+BEGIN;
+
 ALTER DEFAULT PRIVILEGES GRANT USAGE ON SCHEMAS TO regress_priv_user2;
 
 CREATE SCHEMA testns2;
@@ -957,6 +964,8 @@ SELECT has_schema_privilege('regress_priv_user2', 'testns4', 'USAGE'); -- yes
 SELECT has_schema_privilege('regress_priv_user2', 'testns4', 'CREATE'); -- yes
 
 ALTER DEFAULT PRIVILEGES REVOKE ALL ON SCHEMAS FROM regress_priv_user2;
+
+COMMIT;
 
 CREATE SCHEMA testns5;
 

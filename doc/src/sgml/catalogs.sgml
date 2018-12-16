@@ -693,7 +693,7 @@
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -836,7 +836,7 @@
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -926,7 +926,7 @@
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -1312,7 +1312,7 @@
      <row>
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -1538,7 +1538,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -1661,7 +1661,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -1854,15 +1854,6 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
      </row>
 
      <row>
-      <entry><structfield>relhasoids</structfield></entry>
-      <entry><type>bool</type></entry>
-      <entry></entry>
-      <entry>
-       True if we generate an OID for each row of the relation
-      </entry>
-     </row>
-
-     <row>
       <entry><structfield>relhasrules</structfield></entry>
       <entry><type>bool</type></entry>
       <entry></entry>
@@ -1982,10 +1973,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><type>aclitem[]</type></entry>
       <entry></entry>
       <entry>
-       Access privileges; see
-       <xref linkend="sql-grant"/> and
-       <xref linkend="sql-revoke"/>
-       for details
+       Access privileges; see <xref linkend="ddl-priv"/> for details
       </entry>
      </row>
 
@@ -2055,7 +2043,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -2193,7 +2181,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -2460,7 +2448,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -2560,7 +2548,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -2688,10 +2676,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><type>aclitem[]</type></entry>
       <entry></entry>
       <entry>
-       Access privileges; see
-       <xref linkend="sql-grant"/> and
-       <xref linkend="sql-revoke"/>
-       for details
+       Access privileges; see <xref linkend="ddl-priv"/> for details
       </entry>
      </row>
     </tbody>
@@ -2790,7 +2775,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -3188,7 +3173,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -3351,7 +3336,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -3454,7 +3439,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -3500,10 +3485,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><type>aclitem[]</type></entry>
       <entry></entry>
       <entry>
-       Access privileges; see
-       <xref linkend="sql-grant"/> and
-       <xref linkend="sql-revoke"/>
-       for details
+       Access privileges; see <xref linkend="ddl-priv"/> for details
       </entry>
      </row>
 
@@ -3553,7 +3535,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -3596,10 +3578,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><type>aclitem[]</type></entry>
       <entry></entry>
       <entry>
-       Access privileges; see
-       <xref linkend="sql-grant"/> and
-       <xref linkend="sql-revoke"/>
-       for details
+       Access privileges; see <xref linkend="ddl-priv"/> for details
       </entry>
      </row>
 
@@ -4061,9 +4040,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry></entry>
       <entry>
        The initial access privileges; see
-       <xref linkend="sql-grant"/> and
-       <xref linkend="sql-revoke"/>
-       for details
+       <xref linkend="ddl-priv"/> for details
       </entry>
      </row>
 
@@ -4106,7 +4083,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -4188,10 +4165,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><type>aclitem[]</type></entry>
       <entry></entry>
       <entry>
-       Access privileges; see
-       <xref linkend="sql-grant"/> and
-       <xref linkend="sql-revoke"/>
-       for details
+       Access privileges; see <xref linkend="ddl-priv"/> for details
       </entry>
      </row>
     </tbody>
@@ -4313,7 +4287,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -4328,10 +4302,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><type>aclitem[]</type></entry>
       <entry></entry>
       <entry>
-       Access privileges; see
-       <xref linkend="sql-grant"/> and
-       <xref linkend="sql-revoke"/>
-       for details
+       Access privileges; see <xref linkend="ddl-priv"/> for details
       </entry>
      </row>
 
@@ -4373,7 +4344,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -4395,10 +4366,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><type>aclitem[]</type></entry>
       <entry></entry>
       <entry>
-       Access privileges; see
-       <xref linkend="sql-grant"/> and
-       <xref linkend="sql-revoke"/>
-       for details
+       Access privileges; see <xref linkend="ddl-priv"/> for details
       </entry>
      </row>
     </tbody>
@@ -4448,7 +4416,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -4553,7 +4521,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -4710,7 +4678,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -5120,7 +5088,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -5405,10 +5373,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><type>aclitem[]</type></entry>
       <entry></entry>
       <entry>
-       Access privileges; see
-       <xref linkend="sql-grant"/> and
-       <xref linkend="sql-revoke"/>
-       for details
+       Access privileges; see <xref linkend="ddl-priv"/> for details
       </entry>
      </row>
     </tbody>
@@ -5458,7 +5423,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -5734,7 +5699,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -6430,6 +6395,18 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
      </row>
 
      <row>
+      <entry><structfield>stacoll<replaceable>N</replaceable></structfield></entry>
+      <entry><type>oid</type></entry>
+      <entry><literal><link linkend="catalog-pg-collation"><structname>pg_collation</structname></link>.oid</literal></entry>
+      <entry>
+       The collation used to derive the statistics stored in the
+       <replaceable>N</replaceable>th <quote>slot</quote>.  For example, a
+       histogram slot for a collatable column would show the collation that
+       defines the sort order of the data.  Zero for noncollatable data.
+      </entry>
+     </row>
+
+     <row>
       <entry><structfield>stanumbers<replaceable>N</replaceable></structfield></entry>
       <entry><type>float4[]</type></entry>
       <entry></entry>
@@ -6616,7 +6593,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -6797,7 +6774,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -6819,10 +6796,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><type>aclitem[]</type></entry>
       <entry></entry>
       <entry>
-       Access privileges; see
-       <xref linkend="sql-grant"/> and
-       <xref linkend="sql-revoke"/>
-       for details
+       Access privileges; see <xref linkend="ddl-priv"/> for details
       </entry>
      </row>
 
@@ -6940,7 +6914,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -7149,7 +7123,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -7295,7 +7269,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -7378,7 +7352,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -7475,7 +7449,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -7549,7 +7523,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>
@@ -7932,10 +7906,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><type>aclitem[]</type></entry>
       <entry></entry>
       <entry>
-       Access privileges; see
-       <xref linkend="sql-grant"/> and
-       <xref linkend="sql-revoke"/>
-       for details
+       Access privileges; see <xref linkend="ddl-priv"/> for details
       </entry>
      </row>
     </tbody>
@@ -8061,7 +8032,7 @@ SCRAM-SHA-256$<replaceable>&lt;iteration count&gt;</replaceable>:<replaceable>&l
       <entry><structfield>oid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry></entry>
-      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+      <entry>Row identifier</entry>
      </row>
 
      <row>

@@ -764,7 +764,8 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	 */
 	tgrel = heap_open(TriggerRelationId, RowExclusiveLock);
 
-	trigoid = GetNewOid(tgrel);
+	trigoid = GetNewOidWithIndex(tgrel, TriggerOidIndexId,
+								 Anum_pg_trigger_oid);
 
 	/*
 	 * If trigger is internally generated, modify the provided trigger name to
@@ -824,6 +825,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	 */
 	memset(nulls, false, sizeof(nulls));
 
+	values[Anum_pg_trigger_oid - 1] = ObjectIdGetDatum(trigoid);
 	values[Anum_pg_trigger_tgrelid - 1] = ObjectIdGetDatum(RelationGetRelid(rel));
 	values[Anum_pg_trigger_tgname - 1] = DirectFunctionCall1(namein,
 															 CStringGetDatum(trigname));
@@ -939,9 +941,6 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 		nulls[Anum_pg_trigger_tgnewtable - 1] = true;
 
 	tuple = heap_form_tuple(tgrel->rd_att, values, nulls);
-
-	/* force tuple to have the desired OID */
-	HeapTupleSetOid(tuple, trigoid);
 
 	/*
 	 * Insert tuple into pg_trigger.
@@ -1494,7 +1493,7 @@ RemoveTriggerById(Oid trigOid)
 	 * Find the trigger to delete.
 	 */
 	ScanKeyInit(&skey[0],
-				ObjectIdAttributeNumber,
+				Anum_pg_trigger_oid,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(trigOid));
 
@@ -1595,7 +1594,7 @@ get_trigger_oid(Oid relid, const char *trigname, bool missing_ok)
 	}
 	else
 	{
-		oid = HeapTupleGetOid(tup);
+		oid = ((Form_pg_trigger) GETSTRUCT(tup))->oid;
 	}
 
 	systable_endscan(tgscan);
@@ -1722,20 +1721,22 @@ renametrig(RenameStmt *stmt)
 								NULL, 2, key);
 	if (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
 	{
-		tgoid = HeapTupleGetOid(tuple);
+		Form_pg_trigger trigform = (Form_pg_trigger) GETSTRUCT(tuple);
+
+		tgoid = trigform->oid;
 
 		/*
 		 * Update pg_trigger tuple with new tgname.
 		 */
 		tuple = heap_copytuple(tuple);	/* need a modifiable copy */
 
-		namestrcpy(&((Form_pg_trigger) GETSTRUCT(tuple))->tgname,
+		namestrcpy(&trigform->tgname,
 				   stmt->newname);
 
 		CatalogTupleUpdate(tgrel, &tuple->t_self, tuple);
 
 		InvokeObjectPostAlterHook(TriggerRelationId,
-								  HeapTupleGetOid(tuple), 0);
+								  tgoid, 0);
 
 		/*
 		 * Invalidate relation's relcache entry so that other backends (and
@@ -1874,7 +1875,7 @@ EnableDisableTrigger(Relation rel, const char *tgname,
 		}
 
 		InvokeObjectPostAlterHook(TriggerRelationId,
-								  HeapTupleGetOid(tuple), 0);
+								  oldtrig->oid, 0);
 	}
 
 	systable_endscan(tgscan);
@@ -1958,7 +1959,7 @@ RelationBuildTriggers(Relation relation)
 		}
 		build = &(triggers[numtrigs]);
 
-		build->tgoid = HeapTupleGetOid(htup);
+		build->tgoid = pg_trigger->oid;
 		build->tgname = DatumGetCString(DirectFunctionCall1(nameout,
 															NameGetDatum(&pg_trigger->tgname)));
 		build->tgfoid = pg_trigger->tgfoid;
@@ -2517,7 +2518,8 @@ ExecBRInsertTriggers(EState *estate, ResultRelInfo *relinfo,
 					 TupleTableSlot *slot)
 {
 	TriggerDesc *trigdesc = relinfo->ri_TrigDesc;
-	HeapTuple	slottuple = ExecMaterializeSlot(slot);
+	bool		should_free;
+	HeapTuple	slottuple = ExecFetchSlotHeapTuple(slot, true, &should_free);
 	HeapTuple	newtuple = slottuple;
 	HeapTuple	oldtuple;
 	TriggerData LocTriggerData;
@@ -2556,7 +2558,11 @@ ExecBRInsertTriggers(EState *estate, ResultRelInfo *relinfo,
 		if (oldtuple != newtuple && oldtuple != slottuple)
 			heap_freetuple(oldtuple);
 		if (newtuple == NULL)
+		{
+			if (should_free)
+				heap_freetuple(slottuple);
 			return NULL;		/* "do nothing" */
+		}
 	}
 
 	if (newtuple != slottuple)
@@ -2575,6 +2581,9 @@ ExecBRInsertTriggers(EState *estate, ResultRelInfo *relinfo,
 		ExecStoreHeapTuple(newtuple, newslot, false);
 		slot = newslot;
 	}
+
+	if (should_free)
+		heap_freetuple(slottuple);
 	return slot;
 }
 
@@ -2598,7 +2607,8 @@ ExecIRInsertTriggers(EState *estate, ResultRelInfo *relinfo,
 					 TupleTableSlot *slot)
 {
 	TriggerDesc *trigdesc = relinfo->ri_TrigDesc;
-	HeapTuple	slottuple = ExecMaterializeSlot(slot);
+	bool		should_free;
+	HeapTuple	slottuple = ExecFetchSlotHeapTuple(slot, true, &should_free);
 	HeapTuple	newtuple = slottuple;
 	HeapTuple	oldtuple;
 	TriggerData LocTriggerData;
@@ -2637,7 +2647,11 @@ ExecIRInsertTriggers(EState *estate, ResultRelInfo *relinfo,
 		if (oldtuple != newtuple && oldtuple != slottuple)
 			heap_freetuple(oldtuple);
 		if (newtuple == NULL)
+		{
+			if (should_free)
+				heap_freetuple(slottuple);
 			return NULL;		/* "do nothing" */
+		}
 	}
 
 	if (newtuple != slottuple)
@@ -2656,6 +2670,9 @@ ExecIRInsertTriggers(EState *estate, ResultRelInfo *relinfo,
 		ExecStoreHeapTuple(newtuple, newslot, false);
 		slot = newslot;
 	}
+
+	if (should_free)
+		heap_freetuple(slottuple);
 	return slot;
 }
 
@@ -2976,7 +2993,7 @@ ExecBRUpdateTriggers(EState *estate, EPQState *epqstate,
 					 TupleTableSlot *slot)
 {
 	TriggerDesc *trigdesc = relinfo->ri_TrigDesc;
-	HeapTuple	slottuple = ExecMaterializeSlot(slot);
+	HeapTuple	slottuple = ExecFetchSlotHeapTuple(slot, true, NULL);
 	HeapTuple	newtuple = slottuple;
 	TriggerData LocTriggerData;
 	HeapTuple	trigtuple;
@@ -3018,7 +3035,7 @@ ExecBRUpdateTriggers(EState *estate, EPQState *epqstate,
 	if (newSlot != NULL)
 	{
 		slot = ExecFilterJunk(relinfo->ri_junkFilter, newSlot);
-		slottuple = ExecMaterializeSlot(slot);
+		slottuple = ExecFetchSlotHeapTuple(slot, true, NULL);
 		newtuple = slottuple;
 	}
 
@@ -3132,7 +3149,7 @@ ExecIRUpdateTriggers(EState *estate, ResultRelInfo *relinfo,
 					 HeapTuple trigtuple, TupleTableSlot *slot)
 {
 	TriggerDesc *trigdesc = relinfo->ri_TrigDesc;
-	HeapTuple	slottuple = ExecMaterializeSlot(slot);
+	HeapTuple	slottuple = ExecFetchSlotHeapTuple(slot, true, NULL);
 	HeapTuple	newtuple = slottuple;
 	TriggerData LocTriggerData;
 	HeapTuple	oldtuple;
@@ -3509,7 +3526,7 @@ TriggerEnabled(EState *estate, ResultRelInfo *relinfo,
 			{
 				oldContext = MemoryContextSwitchTo(estate->es_query_cxt);
 				estate->es_trig_oldtup_slot =
-					ExecInitExtraTupleSlot(estate, NULL);
+					ExecInitExtraTupleSlot(estate, NULL, &TTSOpsHeapTuple);
 				MemoryContextSwitchTo(oldContext);
 			}
 			oldslot = estate->es_trig_oldtup_slot;
@@ -3523,7 +3540,7 @@ TriggerEnabled(EState *estate, ResultRelInfo *relinfo,
 			{
 				oldContext = MemoryContextSwitchTo(estate->es_query_cxt);
 				estate->es_trig_newtup_slot =
-					ExecInitExtraTupleSlot(estate, NULL);
+					ExecInitExtraTupleSlot(estate, NULL, &TTSOpsHeapTuple);
 				MemoryContextSwitchTo(oldContext);
 			}
 			newslot = estate->es_trig_newtup_slot;
@@ -4262,22 +4279,22 @@ AfterTriggerExecute(AfterTriggerEvent event,
 		case AFTER_TRIGGER_FDW_REUSE:
 
 			/*
-			 * Using ExecMaterializeSlot() rather than ExecFetchSlotTuple()
-			 * ensures that tg_trigtuple does not reference tuplestore memory.
-			 * (It is formally possible for the trigger function to queue
-			 * trigger events that add to the same tuplestore, which can push
-			 * other tuples out of memory.)  The distinction is academic,
-			 * because we start with a minimal tuple that ExecFetchSlotTuple()
-			 * must materialize anyway.
+			 * Materialize tuple in the slot so that tg_trigtuple does not
+			 * reference tuplestore memory.  (It is formally possible for the
+			 * trigger function to queue trigger events that add to the same
+			 * tuplestore, which can push other tuples out of memory.)  The
+			 * distinction is academic, because we start with a minimal tuple
+			 * that is stored as a heap tuple, constructed in different memory
+			 * context, in the slot anyway.
 			 */
-			LocTriggerData.tg_trigtuple =
-				ExecMaterializeSlot(trig_tuple_slot1);
+			LocTriggerData.tg_trigtuple = ExecFetchSlotHeapTuple(trig_tuple_slot1,
+																	true, NULL);
 			LocTriggerData.tg_trigtuplebuf = InvalidBuffer;
 
 			LocTriggerData.tg_newtuple =
 				((evtshared->ats_event & TRIGGER_EVENT_OPMASK) ==
 				 TRIGGER_EVENT_UPDATE) ?
-				ExecMaterializeSlot(trig_tuple_slot2) : NULL;
+				ExecFetchSlotHeapTuple(trig_tuple_slot2, true, NULL) : NULL;
 			LocTriggerData.tg_newtuplebuf = InvalidBuffer;
 
 			break;
@@ -4530,8 +4547,10 @@ afterTriggerInvokeEvents(AfterTriggerEventList *events,
 							ExecDropSingleTupleTableSlot(slot1);
 							ExecDropSingleTupleTableSlot(slot2);
 						}
-						slot1 = MakeSingleTupleTableSlot(rel->rd_att);
-						slot2 = MakeSingleTupleTableSlot(rel->rd_att);
+						slot1 = MakeSingleTupleTableSlot(rel->rd_att,
+														 &TTSOpsMinimalTuple);
+						slot2 = MakeSingleTupleTableSlot(rel->rd_att,
+														 &TTSOpsMinimalTuple);
 					}
 					if (trigdesc == NULL)	/* should not happen */
 						elog(ERROR, "relation %u has no triggers",
@@ -5445,8 +5464,7 @@ AfterTriggerSetState(ConstraintsSetStmt *stmt)
 					Form_pg_constraint con = (Form_pg_constraint) GETSTRUCT(tup);
 
 					if (con->condeferrable)
-						conoidlist = lappend_oid(conoidlist,
-												 HeapTupleGetOid(tup));
+						conoidlist = lappend_oid(conoidlist, con->oid);
 					else if (stmt->deferred)
 						ereport(ERROR,
 								(errcode(ERRCODE_WRONG_OBJECT_TYPE),
@@ -5498,7 +5516,11 @@ AfterTriggerSetState(ConstraintsSetStmt *stmt)
 			scan = systable_beginscan(conrel, ConstraintParentIndexId, true, NULL, 1, &key);
 
 			while (HeapTupleIsValid(tuple = systable_getnext(scan)))
-				conoidlist = lappend_oid(conoidlist, HeapTupleGetOid(tuple));
+			{
+				Form_pg_constraint con = (Form_pg_constraint) GETSTRUCT(tuple);
+
+				conoidlist = lappend_oid(conoidlist, con->oid);
+			}
 
 			systable_endscan(scan);
 		}
@@ -5540,8 +5562,7 @@ AfterTriggerSetState(ConstraintsSetStmt *stmt)
 				 * actions.
 				 */
 				if (pg_trigger->tgdeferrable)
-					tgoidlist = lappend_oid(tgoidlist,
-											HeapTupleGetOid(htup));
+					tgoidlist = lappend_oid(tgoidlist, pg_trigger->oid);
 
 				found = true;
 			}
@@ -5950,12 +5971,12 @@ AfterTriggerSaveEvent(EState *estate, ResultRelInfo *relinfo,
 		 * certain cases where we can skip queueing the event because we can
 		 * tell by inspection that the FK constraint will still pass.
 		 */
-		if (TRIGGER_FIRED_BY_UPDATE(event))
+		if (TRIGGER_FIRED_BY_UPDATE(event) || TRIGGER_FIRED_BY_DELETE(event))
 		{
 			switch (RI_FKey_trigger_type(trigger->tgfoid))
 			{
 				case RI_TRIGGER_PK:
-					/* Update on trigger's PK table */
+					/* Update or delete on trigger's PK table */
 					if (!RI_FKey_pk_upd_check_required(trigger, rel,
 													   oldtup, newtup))
 					{

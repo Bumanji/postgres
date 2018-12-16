@@ -190,32 +190,6 @@ insert into d values('test','one','two','three');
 alter table a alter column aa type integer using bit_length(aa);
 select * from d;
 
--- check that oid column is handled properly during alter table inherit
-create table oid_parent (a int) with oids;
-
-create table oid_child () inherits (oid_parent);
-select attinhcount, attislocal from pg_attribute
-  where attrelid = 'oid_child'::regclass and attname = 'oid';
-drop table oid_child;
-
-create table oid_child (a int) without oids;
-alter table oid_child inherit oid_parent;  -- fail
-alter table oid_child set with oids;
-select attinhcount, attislocal from pg_attribute
-  where attrelid = 'oid_child'::regclass and attname = 'oid';
-alter table oid_child inherit oid_parent;
-select attinhcount, attislocal from pg_attribute
-  where attrelid = 'oid_child'::regclass and attname = 'oid';
-alter table oid_child set without oids;  -- fail
-alter table oid_parent set without oids;
-select attinhcount, attislocal from pg_attribute
-  where attrelid = 'oid_child'::regclass and attname = 'oid';
-alter table oid_child set without oids;
-select attinhcount, attislocal from pg_attribute
-  where attrelid = 'oid_child'::regclass and attname = 'oid';
-
-drop table oid_parent cascade;
-
 -- Test non-inheritable parent constraints
 create table p1(ff1 int);
 alter table p1 add constraint p1chk check (ff1 > 0) no inherit;
@@ -237,9 +211,14 @@ drop table p1 cascade;
 -- tables. See the pgsql-hackers thread beginning Dec. 4/04
 create table base (i integer);
 create table derived () inherits (base);
+create table more_derived (like derived, b int) inherits (derived);
 insert into derived (i) values (0);
 select derived::base from derived;
 select NULL::derived::base;
+-- remove redundant conversions.
+explain (verbose on, costs off) select row(i, b)::more_derived::derived::base from more_derived;
+explain (verbose on, costs off) select (1, 2)::more_derived::derived::base;
+drop table more_derived;
 drop table derived;
 drop table base;
 

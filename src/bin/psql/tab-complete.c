@@ -1884,9 +1884,6 @@ psql_completion(const char *text, int start, int end)
 	 */
 	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "TABLESPACE"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_tablespaces);
-	/* If we have ALTER TABLE <sth> SET WITH provide OIDS */
-	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "WITH"))
-		COMPLETE_WITH("OIDS");
 	/* If we have ALTER TABLE <sth> SET WITHOUT provide CLUSTER or OIDS */
 	else if (Matches("ALTER", "TABLE", MatchAny, "SET", "WITHOUT"))
 		COMPLETE_WITH("CLUSTER", "OIDS");
@@ -2155,7 +2152,7 @@ psql_completion(const char *text, int start, int end)
 	/* Handle COPY [BINARY] <sth> FROM|TO filename */
 	else if (Matches("COPY|\\copy", MatchAny, "FROM|TO", MatchAny) ||
 			 Matches("COPY", "BINARY", MatchAny, "FROM|TO", MatchAny))
-		COMPLETE_WITH("BINARY", "OIDS", "DELIMITER", "NULL", "CSV",
+		COMPLETE_WITH("BINARY", "DELIMITER", "NULL", "CSV",
 					  "ENCODING");
 
 	/* Handle COPY [BINARY] <sth> FROM|TO filename CSV */
@@ -2393,9 +2390,7 @@ psql_completion(const char *text, int start, int end)
 		COMPLETE_WITH("(", "ON");
 	else if (Matches("CREATE", "STATISTICS", MatchAny, "("))
 		COMPLETE_WITH("ndistinct", "dependencies");
-	else if (HeadMatches("CREATE", "STATISTICS", MatchAny) &&
-			 previous_words[0][0] == '(' &&
-			 previous_words[0][strlen(previous_words[0]) - 1] == ')')
+	else if (Matches("CREATE", "STATISTICS", MatchAny, "(*)"))
 		COMPLETE_WITH("ON");
 	else if (HeadMatches("CREATE", "STATISTICS", MatchAny) &&
 			 TailMatches("FROM"))
@@ -2608,6 +2603,7 @@ psql_completion(const char *text, int start, int end)
 	/* Complete CREATE EVENT TRIGGER <name> ON with event_type */
 	else if (Matches("CREATE", "EVENT", "TRIGGER", MatchAny, "ON"))
 		COMPLETE_WITH("ddl_command_start", "ddl_command_end", "sql_drop");
+
 	/*
 	 * Complete CREATE EVENT TRIGGER <name> ON <event_type>.  EXECUTE FUNCTION
 	 * is the recommended grammar instead of EXECUTE PROCEDURE in version 11
@@ -3527,7 +3523,7 @@ psql_completion(const char *text, int start, int end)
 	else if (TailMatchesCS("\\password"))
 		COMPLETE_WITH_QUERY(Query_for_list_of_roles);
 	else if (TailMatchesCS("\\pset"))
-		COMPLETE_WITH_CS("border", "columns", "expanded",
+		COMPLETE_WITH_CS("border", "columns", "csv_fieldsep", "expanded",
 						 "fieldsep", "fieldsep_zero", "footer", "format",
 						 "linestyle", "null", "numericlocale",
 						 "pager", "pager_min_lines",
@@ -3539,9 +3535,9 @@ psql_completion(const char *text, int start, int end)
 	else if (TailMatchesCS("\\pset", MatchAny))
 	{
 		if (TailMatchesCS("format"))
-			COMPLETE_WITH_CS("unaligned", "aligned", "wrapped", "html",
-							 "asciidoc", "latex", "latex-longtable",
-							 "troff-ms");
+			COMPLETE_WITH_CS("aligned", "asciidoc", "csv", "html", "latex",
+							 "latex-longtable", "troff-ms", "unaligned",
+							 "wrapped");
 		else if (TailMatchesCS("linestyle"))
 			COMPLETE_WITH_CS("ascii", "old-ascii", "unicode");
 		else if (TailMatchesCS("pager"))

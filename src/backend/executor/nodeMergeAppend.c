@@ -165,9 +165,13 @@ ExecInitMergeAppend(MergeAppend *node, EState *estate, int eflags)
 	 * Miscellaneous initialization
 	 *
 	 * MergeAppend nodes do have Result slots, which hold pointers to tuples,
-	 * so we have to initialize them.
+	 * so we have to initialize them.  FIXME
 	 */
-	ExecInitResultTupleSlotTL(estate, &mergestate->ps);
+	ExecInitResultTupleSlotTL(&mergestate->ps, &TTSOpsVirtual);
+
+	/* node returns slots from each of its subnodes, therefore not fixed */
+	mergestate->ps.resultopsset = true;
+	mergestate->ps.resultopsfixed = false;
 
 	/*
 	 * call ExecInitNode on each of the valid plans to be executed and save

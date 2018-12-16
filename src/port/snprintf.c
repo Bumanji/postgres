@@ -452,8 +452,6 @@ dopr(PrintfTarget *target, const char *format, va_list args)
 		have_star = afterstar = false;
 nextch2:
 		ch = *format++;
-		if (ch == '\0')
-			break;				/* illegal, but we don't complain */
 		switch (ch)
 		{
 			case '-':
@@ -718,6 +716,13 @@ nextch2:
 			case '%':
 				dopr_outch('%', target);
 				break;
+			default:
+
+				/*
+				 * Anything else --- in particular, '\0' indicating end of
+				 * format string --- is bogus.
+				 */
+				goto bad_format;
 		}
 
 		/* Check for failure after each conversion spec */
@@ -782,8 +787,6 @@ find_arguments(const char *format, va_list args,
 		afterstar = false;
 nextch1:
 		ch = *format++;
-		if (ch == '\0')
-			break;				/* illegal, but we don't complain */
 		switch (ch)
 		{
 			case '-':
@@ -918,6 +921,8 @@ nextch1:
 			case 'm':
 			case '%':
 				break;
+			default:
+				return false;	/* bogus format string */
 		}
 
 		/*
@@ -1046,11 +1051,19 @@ fmtint(long long value, char type, int forcesign, int leftjust,
 			return;				/* keep compiler quiet */
 	}
 
+	/* disable MSVC warning about applying unary minus to an unsigned value */
+#if _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4146)
+#endif
 	/* Handle +/- */
 	if (dosign && adjust_sign((value < 0), forcesign, &signvalue))
 		uvalue = -(unsigned long long) value;
 	else
 		uvalue = (unsigned long long) value;
+#if _MSC_VER
+#pragma warning(pop)
+#endif
 
 	/*
 	 * SUS: the result of converting 0 with an explicit precision of 0 is no

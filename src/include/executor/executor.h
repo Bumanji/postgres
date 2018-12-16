@@ -50,19 +50,13 @@
  * AfterTriggerBeginQuery/AfterTriggerEndQuery.  This does not necessarily
  * mean that the plan can't queue any AFTER triggers; just that the caller
  * is responsible for there being a trigger context for them to be queued in.
- *
- * WITH/WITHOUT_OIDS tell the executor to emit tuples with or without space
- * for OIDs, respectively.  These are currently used only for CREATE TABLE AS.
- * If neither is set, the plan may or may not produce tuples including OIDs.
  */
 #define EXEC_FLAG_EXPLAIN_ONLY	0x0001	/* EXPLAIN, no ANALYZE */
 #define EXEC_FLAG_REWIND		0x0002	/* need efficient rescan */
 #define EXEC_FLAG_BACKWARD		0x0004	/* need backward scan */
 #define EXEC_FLAG_MARK			0x0008	/* need mark/restore */
 #define EXEC_FLAG_SKIP_TRIGGERS 0x0010	/* skip AfterTrigger calls */
-#define EXEC_FLAG_WITH_OIDS		0x0020	/* force OIDs in returned tuples */
-#define EXEC_FLAG_WITHOUT_OIDS	0x0040	/* force no OIDs in returned tuples */
-#define EXEC_FLAG_WITH_NO_DATA	0x0080	/* rel scannability doesn't matter */
+#define EXEC_FLAG_WITH_NO_DATA	0x0020	/* rel scannability doesn't matter */
 
 
 /* Hook for plugins to get control in ExecutorStart() */
@@ -140,7 +134,7 @@ extern TupleHashEntry FindTupleHashEntry(TupleHashTable hashtable,
 /*
  * prototypes from functions in execJunk.c
  */
-extern JunkFilter *ExecInitJunkFilter(List *targetList, bool hasoid,
+extern JunkFilter *ExecInitJunkFilter(List *targetList,
 				   TupleTableSlot *slot);
 extern JunkFilter *ExecInitJunkFilterConversion(List *targetList,
 							 TupleDesc cleanTupType,
@@ -178,7 +172,6 @@ extern void InitResultRelInfo(ResultRelInfo *resultRelInfo,
 				  int instrument_options);
 extern ResultRelInfo *ExecGetTriggerResultRel(EState *estate, Oid relid);
 extern void ExecCleanUpTriggerState(EState *estate);
-extern bool ExecContextForcesOids(PlanState *planstate, bool *hasoids);
 extern void ExecConstraints(ResultRelInfo *resultRelInfo,
 				TupleTableSlot *slot, EState *estate);
 extern bool ExecPartitionCheck(ResultRelInfo *resultRelInfo,
@@ -249,6 +242,7 @@ extern List *ExecInitExprList(List *nodes, PlanState *parent);
 extern ExprState *ExecBuildAggTrans(AggState *aggstate, struct AggStatePerPhaseData *phase,
 				  bool doSort, bool doHash);
 extern ExprState *ExecBuildGroupingEqual(TupleDesc ldesc, TupleDesc rdesc,
+					   const TupleTableSlotOps *lops, const TupleTableSlotOps *rops,
 					   int numCols,
 					   AttrNumber *keyColIdx,
 					   Oid *eqfunctions,
@@ -429,14 +423,21 @@ extern void ExecScanReScan(ScanState *node);
 /*
  * prototypes from functions in execTuples.c
  */
-extern void ExecInitResultTupleSlotTL(EState *estate, PlanState *planstate);
-extern void ExecInitScanTupleSlot(EState *estate, ScanState *scanstate, TupleDesc tupleDesc);
+extern void ExecInitResultTypeTL(PlanState *planstate);
+extern void ExecInitResultSlot(PlanState *planstate,
+							   const TupleTableSlotOps *tts_ops);
+extern void ExecInitResultTupleSlotTL(PlanState *planstate,
+									  const TupleTableSlotOps *tts_ops);
+extern void ExecInitScanTupleSlot(EState *estate, ScanState *scanstate,
+								  TupleDesc tupleDesc,
+								  const TupleTableSlotOps *tts_ops);
 extern TupleTableSlot *ExecInitExtraTupleSlot(EState *estate,
-					   TupleDesc tupleDesc);
-extern TupleTableSlot *ExecInitNullTupleSlot(EState *estate,
-					  TupleDesc tupType);
-extern TupleDesc ExecTypeFromTL(List *targetList, bool hasoid);
-extern TupleDesc ExecCleanTypeFromTL(List *targetList, bool hasoid);
+					   TupleDesc tupledesc,
+					   const TupleTableSlotOps *tts_ops);
+extern TupleTableSlot *ExecInitNullTupleSlot(EState *estate, TupleDesc tupType,
+					  const TupleTableSlotOps *tts_ops);
+extern TupleDesc ExecTypeFromTL(List *targetList);
+extern TupleDesc ExecCleanTypeFromTL(List *targetList);
 extern TupleDesc ExecTypeFromExprList(List *exprList);
 extern void ExecTypeSetColNames(TupleDesc typeInfo, List *namesList);
 extern void UpdateChangedParamSet(PlanState *node, Bitmapset *newchg);
@@ -448,7 +449,8 @@ typedef struct TupOutputState
 } TupOutputState;
 
 extern TupOutputState *begin_tup_output_tupdesc(DestReceiver *dest,
-						 TupleDesc tupdesc);
+						 TupleDesc tupdesc,
+						 const TupleTableSlotOps *tts_ops);
 extern void do_tup_output(TupOutputState *tstate, Datum *values, bool *isnull);
 extern void do_text_output_multiline(TupOutputState *tstate, const char *txt);
 extern void end_tup_output(TupOutputState *tstate);
@@ -502,13 +504,18 @@ extern ExprContext *MakePerTupleExprContext(EState *estate);
 
 extern void ExecAssignExprContext(EState *estate, PlanState *planstate);
 extern TupleDesc ExecGetResultType(PlanState *planstate);
+extern TupleTableSlot ExecGetResultSlot(PlanState *planstate);
+extern const TupleTableSlotOps *ExecGetResultSlotOps(PlanState *planstate,
+													 bool *isfixed);
 extern void ExecAssignProjectionInfo(PlanState *planstate,
 						 TupleDesc inputDesc);
 extern void ExecConditionalAssignProjectionInfo(PlanState *planstate,
 									TupleDesc inputDesc, Index varno);
 extern void ExecFreeExprContext(PlanState *planstate);
 extern void ExecAssignScanType(ScanState *scanstate, TupleDesc tupDesc);
-extern void ExecCreateScanSlotFromOuterPlan(EState *estate, ScanState *scanstate);
+extern void ExecCreateScanSlotFromOuterPlan(EState *estate,
+								ScanState *scanstate,
+								const TupleTableSlotOps *tts_ops);
 
 extern bool ExecRelationIsTargetRelation(EState *estate, Index scanrelid);
 

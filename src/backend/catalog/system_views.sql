@@ -734,7 +734,8 @@ CREATE VIEW pg_stat_replication AS
             W.flush_lag,
             W.replay_lag,
             W.sync_priority,
-            W.sync_state
+            W.sync_state,
+            W.reply_time
     FROM pg_stat_get_activity(NULL) AS S
         JOIN pg_stat_get_wal_senders() AS W ON (S.pid = W.pid)
         LEFT JOIN pg_authid AS U ON (S.usesysid = U.oid);
@@ -1030,7 +1031,7 @@ CREATE OR REPLACE FUNCTION pg_stop_backup (
 CREATE OR REPLACE FUNCTION
   pg_promote(wait boolean DEFAULT true, wait_seconds integer DEFAULT 60)
   RETURNS boolean STRICT VOLATILE LANGUAGE INTERNAL AS 'pg_promote'
-  PARALLEL RESTRICTED;
+  PARALLEL SAFE;
 
 -- legacy definition for compatibility with 9.3
 CREATE OR REPLACE FUNCTION

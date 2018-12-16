@@ -379,7 +379,7 @@ pg_sleep(PG_FUNCTION_ARGS)
 			break;
 
 		(void) WaitLatch(MyLatch,
-						 WL_LATCH_SET | WL_TIMEOUT,
+						 WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
 						 delay_ms,
 						 WAIT_EVENT_PG_SLEEP);
 		ResetLatch(MyLatch);
@@ -402,7 +402,7 @@ pg_get_keywords(PG_FUNCTION_ARGS)
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-		tupdesc = CreateTemplateTupleDesc(3, false);
+		tupdesc = CreateTemplateTupleDesc(3);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 1, "word",
 						   TEXTOID, -1, 0);
 		TupleDescInitEntry(tupdesc, (AttrNumber) 2, "catcode",

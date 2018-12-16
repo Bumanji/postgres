@@ -376,10 +376,13 @@ ExecInitLimit(Limit *node, EState *estate, int eflags)
 										  (PlanState *) limitstate);
 
 	/*
-	 * Initialize result slot and type. (XXX not actually used, but upper
-	 * nodes access it to get this node's result tupledesc...)
+	 * Initialize result type.
 	 */
-	ExecInitResultTupleSlotTL(estate, &limitstate->ps);
+	ExecInitResultTypeTL(&limitstate->ps);
+
+	limitstate->ps.resultopsset = true;
+	limitstate->ps.resultops = ExecGetResultSlotOps(outerPlanState(limitstate),
+													&limitstate->ps.resultopsfixed);
 
 	/*
 	 * limit nodes do no projections, so initialize projection info for this

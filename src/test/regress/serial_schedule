@@ -99,7 +99,6 @@ test: portals
 test: arrays
 test: btree_index
 test: hash_index
-test: func_index
 test: update
 test: delete
 test: namespace
@@ -167,7 +166,6 @@ test: temp
 test: domain
 test: rangefuncs
 test: prepare
-test: without_oid
 test: conversion
 test: truncate
 test: alter_table

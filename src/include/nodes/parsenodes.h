@@ -649,7 +649,6 @@ typedef struct ColumnDef
 	bool		is_local;		/* column has local (non-inherited) def'n */
 	bool		is_not_null;	/* NOT NULL constraint specified? */
 	bool		is_from_type;	/* column definition came from table type */
-	bool		is_from_parent; /* column def came from partition parent */
 	char		storage;		/* attstorage setting, or 0 for default */
 	Node	   *raw_default;	/* default value (untransformed parse tree) */
 	Node	   *cooked_default; /* default value (transformed expr tree) */
@@ -1770,8 +1769,6 @@ typedef enum AlterTableType
 	AT_DropCluster,				/* SET WITHOUT CLUSTER */
 	AT_SetLogged,				/* SET LOGGED */
 	AT_SetUnLogged,				/* SET UNLOGGED */
-	AT_AddOids,					/* SET WITH OIDS */
-	AT_AddOidsRecurse,			/* internal to commands/tablecmds.c */
 	AT_DropOids,				/* SET WITHOUT OIDS */
 	AT_SetTableSpace,			/* SET TABLESPACE */
 	AT_SetRelOptions,			/* SET (...) -- AM specific parameters */

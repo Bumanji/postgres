@@ -30,6 +30,7 @@
 #include <ctype.h>
 
 #include "lib/stringinfo.h"
+#include "miscadmin.h"
 #include "nodes/extensible.h"
 #include "nodes/plannodes.h"
 #include "nodes/relation.h"
@@ -2874,7 +2875,6 @@ _outColumnDef(StringInfo str, const ColumnDef *node)
 	WRITE_BOOL_FIELD(is_local);
 	WRITE_BOOL_FIELD(is_not_null);
 	WRITE_BOOL_FIELD(is_from_type);
-	WRITE_BOOL_FIELD(is_from_parent);
 	WRITE_CHAR_FIELD(storage);
 	WRITE_NODE_FIELD(raw_default);
 	WRITE_NODE_FIELD(cooked_default);
@@ -3702,6 +3702,9 @@ _outPartitionRangeDatum(StringInfo str, const PartitionRangeDatum *node)
 void
 outNode(StringInfo str, const void *obj)
 {
+	/* Guard against stack overflow due to overly complex expressions */
+	check_stack_depth();
+
 	if (obj == NULL)
 		appendStringInfoString(str, "<>");
 	else if (IsA(obj, List) ||IsA(obj, IntList) || IsA(obj, OidList))

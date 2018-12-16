@@ -60,6 +60,9 @@ char	   *SSLECDHCurve;
 /* GUC variable: if false, prefer client ciphers */
 bool		SSLPreferServerCiphers;
 
+int			ssl_min_protocol_version;
+int			ssl_max_protocol_version;
+
 /* ------------------------------------------------------------ */
 /*			 Procedures common to all secure sessions			*/
 /* ------------------------------------------------------------ */
@@ -177,7 +180,7 @@ retry:
 		/*
 		 * If the postmaster has died, it's not safe to continue running,
 		 * because it is the postmaster's job to kill us if some other backend
-		 * exists uncleanly.  Moreover, we won't run very well in this state;
+		 * exits uncleanly.  Moreover, we won't run very well in this state;
 		 * helper processes like walwriter and the bgwriter will exit, so
 		 * performance may be poor.  Finally, if we don't exit, pg_ctl will be
 		 * unable to restart the postmaster without manual intervention, so no

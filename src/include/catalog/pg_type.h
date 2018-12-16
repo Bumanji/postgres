@@ -36,6 +36,8 @@
  */
 CATALOG(pg_type,1247,TypeRelationId) BKI_BOOTSTRAP BKI_ROWTYPE_OID(71,TypeRelation_Rowtype_Id) BKI_SCHEMA_MACRO
 {
+	Oid			oid;			/* oid */
+
 	/* type name */
 	NameData	typname;
 
@@ -323,23 +325,13 @@ extern ObjectAddress TypeCreate(Oid newTypeOid,
 		   bool typeNotNull,
 		   Oid typeCollation);
 
-extern void GenerateTypeDependencies(Oid typeNamespace,
-						 Oid typeObjectId,
-						 Oid relationOid,
-						 char relationKind,
-						 Oid owner,
-						 Oid inputProcedure,
-						 Oid outputProcedure,
-						 Oid receiveProcedure,
-						 Oid sendProcedure,
-						 Oid typmodinProcedure,
-						 Oid typmodoutProcedure,
-						 Oid analyzeProcedure,
-						 Oid elementType,
-						 bool isImplicitArray,
-						 Oid baseType,
-						 Oid typeCollation,
+extern void GenerateTypeDependencies(Oid typeObjectId,
+						 Form_pg_type typeForm,
 						 Node *defaultExpr,
+						 void *typacl,
+						 char relationKind, /* only for relation rowtypes */
+						 bool isImplicitArray,
+						 bool isDependentType,
 						 bool rebuild);
 
 extern void RenameTypeInternal(Oid typeOid, const char *newTypeName,

@@ -213,7 +213,8 @@ create_estate_for_relation(LogicalRepRelMapEntry *rel)
 
 	/* Triggers might need a slot */
 	if (resultRelInfo->ri_TrigDesc)
-		estate->es_trig_tuple_slot = ExecInitExtraTupleSlot(estate, NULL);
+		estate->es_trig_tuple_slot = ExecInitExtraTupleSlot(estate, NULL,
+															&TTSOpsVirtual);
 
 	/* Prepare to catch AFTER triggers. */
 	AfterTriggerBeginQuery();
@@ -609,7 +610,8 @@ apply_handle_insert(StringInfo s)
 	/* Initialize the executor state. */
 	estate = create_estate_for_relation(rel);
 	remoteslot = ExecInitExtraTupleSlot(estate,
-										RelationGetDescr(rel->localrel));
+										RelationGetDescr(rel->localrel),
+										&TTSOpsHeapTuple);
 
 	/* Input functions may need an active snapshot, so get one */
 	PushActiveSnapshot(GetTransactionSnapshot());
@@ -715,9 +717,11 @@ apply_handle_update(StringInfo s)
 	/* Initialize the executor state. */
 	estate = create_estate_for_relation(rel);
 	remoteslot = ExecInitExtraTupleSlot(estate,
-										RelationGetDescr(rel->localrel));
+										RelationGetDescr(rel->localrel),
+										&TTSOpsHeapTuple);
 	localslot = ExecInitExtraTupleSlot(estate,
-									   RelationGetDescr(rel->localrel));
+									   RelationGetDescr(rel->localrel),
+									   &TTSOpsHeapTuple);
 	EvalPlanQualInit(&epqstate, estate, NULL, NIL, -1);
 
 	PushActiveSnapshot(GetTransactionSnapshot());
@@ -756,7 +760,7 @@ apply_handle_update(StringInfo s)
 	{
 		/* Process and store remote tuple in the slot */
 		oldctx = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
-		ExecStoreHeapTuple(localslot->tts_tuple, remoteslot, false);
+		ExecCopySlot(remoteslot, localslot);
 		slot_modify_cstrings(remoteslot, rel, newtup.values, newtup.changed);
 		MemoryContextSwitchTo(oldctx);
 
@@ -833,9 +837,11 @@ apply_handle_delete(StringInfo s)
 	/* Initialize the executor state. */
 	estate = create_estate_for_relation(rel);
 	remoteslot = ExecInitExtraTupleSlot(estate,
-										RelationGetDescr(rel->localrel));
+										RelationGetDescr(rel->localrel),
+										&TTSOpsVirtual);
 	localslot = ExecInitExtraTupleSlot(estate,
-									   RelationGetDescr(rel->localrel));
+									   RelationGetDescr(rel->localrel),
+									   &TTSOpsHeapTuple);
 	EvalPlanQualInit(&epqstate, estate, NULL, NIL, -1);
 
 	PushActiveSnapshot(GetTransactionSnapshot());
@@ -1258,13 +1264,9 @@ LogicalRepApplyLoop(XLogRecPtr last_received)
 
 		rc = WaitLatchOrSocket(MyLatch,
 							   WL_SOCKET_READABLE | WL_LATCH_SET |
-							   WL_TIMEOUT | WL_POSTMASTER_DEATH,
+							   WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
 							   fd, wait_time,
 							   WAIT_EVENT_LOGICAL_APPLY_MAIN);
-
-		/* Emergency bailout if postmaster has died */
-		if (rc & WL_POSTMASTER_DEATH)
-			proc_exit(1);
 
 		if (rc & WL_LATCH_SET)
 		{

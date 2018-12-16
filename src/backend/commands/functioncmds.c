@@ -36,6 +36,7 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/sysattr.h"
+#include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/objectaccess.h"
@@ -938,8 +939,8 @@ CreateFunction(ParseState *pstate, CreateFunctionStmt *stmt)
 				 (PLTemplateExists(language) ?
 				  errhint("Use CREATE EXTENSION to load the language into the database.") : 0)));
 
-	languageOid = HeapTupleGetOid(languageTuple);
 	languageStruct = (Form_pg_language) GETSTRUCT(languageTuple);
+	languageOid = languageStruct->oid;
 
 	if (languageStruct->lanpltrusted)
 	{
@@ -1668,6 +1669,8 @@ CreateCast(CreateCastStmt *stmt)
 						format_type_be(targettypeid))));
 
 	/* ready to go */
+	castid = GetNewOidWithIndex(relation, CastOidIndexId, Anum_pg_cast_oid);
+	values[Anum_pg_cast_oid - 1] = ObjectIdGetDatum(castid);
 	values[Anum_pg_cast_castsource - 1] = ObjectIdGetDatum(sourcetypeid);
 	values[Anum_pg_cast_casttarget - 1] = ObjectIdGetDatum(targettypeid);
 	values[Anum_pg_cast_castfunc - 1] = ObjectIdGetDatum(funcid);
@@ -1678,7 +1681,7 @@ CreateCast(CreateCastStmt *stmt)
 
 	tuple = heap_form_tuple(RelationGetDescr(relation), values, nulls);
 
-	castid = CatalogTupleInsert(relation, tuple);
+	CatalogTupleInsert(relation, tuple);
 
 	/* make dependency entries */
 	myself.classId = CastRelationId;
@@ -1730,7 +1733,7 @@ get_cast_oid(Oid sourcetypeid, Oid targettypeid, bool missing_ok)
 {
 	Oid			oid;
 
-	oid = GetSysCacheOid2(CASTSOURCETARGET,
+	oid = GetSysCacheOid2(CASTSOURCETARGET, Anum_pg_cast_oid,
 						  ObjectIdGetDatum(sourcetypeid),
 						  ObjectIdGetDatum(targettypeid));
 	if (!OidIsValid(oid) && !missing_ok)
@@ -1753,7 +1756,7 @@ DropCastById(Oid castOid)
 	relation = heap_open(CastRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&scankey,
-				ObjectIdAttributeNumber,
+				Anum_pg_cast_oid,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(castOid));
 	scan = systable_beginscan(relation, CastOidIndexId, true,
@@ -1925,6 +1928,8 @@ CreateTransform(CreateTransformStmt *stmt)
 							ObjectIdGetDatum(langid));
 	if (HeapTupleIsValid(tuple))
 	{
+		Form_pg_transform form = (Form_pg_transform) GETSTRUCT(tuple);
+
 		if (!stmt->replace)
 			ereport(ERROR,
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
@@ -1939,14 +1944,17 @@ CreateTransform(CreateTransformStmt *stmt)
 		newtuple = heap_modify_tuple(tuple, RelationGetDescr(relation), values, nulls, replaces);
 		CatalogTupleUpdate(relation, &newtuple->t_self, newtuple);
 
-		transformid = HeapTupleGetOid(tuple);
+		transformid = form->oid;
 		ReleaseSysCache(tuple);
 		is_replace = true;
 	}
 	else
 	{
+		transformid = GetNewOidWithIndex(relation, TransformOidIndexId,
+										 Anum_pg_transform_oid);
+		values[Anum_pg_transform_oid - 1] = ObjectIdGetDatum(transformid);
 		newtuple = heap_form_tuple(RelationGetDescr(relation), values, nulls);
-		transformid = CatalogTupleInsert(relation, newtuple);
+		CatalogTupleInsert(relation, newtuple);
 		is_replace = false;
 	}
 
@@ -2011,7 +2019,7 @@ get_transform_oid(Oid type_id, Oid lang_id, bool missing_ok)
 {
 	Oid			oid;
 
-	oid = GetSysCacheOid2(TRFTYPELANG,
+	oid = GetSysCacheOid2(TRFTYPELANG, Anum_pg_transform_oid,
 						  ObjectIdGetDatum(type_id),
 						  ObjectIdGetDatum(lang_id));
 	if (!OidIsValid(oid) && !missing_ok)
@@ -2035,7 +2043,7 @@ DropTransformById(Oid transformOid)
 	relation = heap_open(TransformRelationId, RowExclusiveLock);
 
 	ScanKeyInit(&scankey,
-				ObjectIdAttributeNumber,
+				Anum_pg_transform_oid,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(transformOid));
 	scan = systable_beginscan(relation, TransformOidIndexId, true,
@@ -2140,8 +2148,8 @@ ExecuteDoStmt(DoStmt *stmt, bool atomic)
 				 (PLTemplateExists(language) ?
 				  errhint("Use CREATE EXTENSION to load the language into the database.") : 0)));
 
-	codeblock->langOid = HeapTupleGetOid(languageTuple);
 	languageStruct = (Form_pg_language) GETSTRUCT(languageTuple);
+	codeblock->langOid = languageStruct->oid;
 	codeblock->langIsTrusted = languageStruct->lanpltrusted;
 	codeblock->atomic = atomic;
 
@@ -2225,6 +2233,7 @@ ExecuteCallStmt(CallStmt *stmt, ParamListInfo params, bool atomic, DestReceiver 
 
 	fexpr = stmt->funcexpr;
 	Assert(fexpr);
+	Assert(IsA(fexpr, FuncExpr));
 
 	aclresult = pg_proc_aclcheck(fexpr->funcid, GetUserId(), ACL_EXECUTE);
 	if (aclresult != ACLCHECK_OK)
@@ -2253,13 +2262,25 @@ ExecuteCallStmt(CallStmt *stmt, ParamListInfo params, bool atomic, DestReceiver 
 	 * and AbortTransaction() resets the security context.  This could be
 	 * reorganized, but right now it doesn't work.
 	 */
-	if (((Form_pg_proc )GETSTRUCT(tp))->prosecdef)
+	if (((Form_pg_proc) GETSTRUCT(tp))->prosecdef)
 		callcontext->atomic = true;
 
 	/*
-	 * Expand named arguments, defaults, etc.
+	 * Expand named arguments, defaults, etc.  We do not want to scribble on
+	 * the passed-in CallStmt parse tree, so first flat-copy fexpr, allowing
+	 * us to replace its args field.  (Note that expand_function_arguments
+	 * will not modify any of the passed-in data structure.)
 	 */
-	fexpr->args = expand_function_arguments(fexpr->args, fexpr->funcresulttype, tp);
+	{
+		FuncExpr   *nexpr = makeNode(FuncExpr);
+
+		memcpy(nexpr, fexpr, sizeof(FuncExpr));
+		fexpr = nexpr;
+	}
+
+	fexpr->args = expand_function_arguments(fexpr->args,
+											fexpr->funcresulttype,
+											tp);
 	nargs = list_length(fexpr->args);
 
 	ReleaseSysCache(tp);
@@ -2334,7 +2355,8 @@ ExecuteCallStmt(CallStmt *stmt, ParamListInfo params, bool atomic, DestReceiver 
 		tupTypmod = HeapTupleHeaderGetTypMod(td);
 		retdesc = lookup_rowtype_tupdesc(tupType, tupTypmod);
 
-		tstate = begin_tup_output_tupdesc(dest, retdesc);
+		tstate = begin_tup_output_tupdesc(dest, retdesc,
+										  &TTSOpsHeapTuple);
 
 		rettupdata.t_len = HeapTupleHeaderGetDatumLength(td);
 		ItemPointerSetInvalid(&(rettupdata.t_self));
@@ -2362,8 +2384,8 @@ TupleDesc
 CallStmtResultDesc(CallStmt *stmt)
 {
 	FuncExpr   *fexpr;
-	HeapTuple   tuple;
-	TupleDesc   tupdesc;
+	HeapTuple	tuple;
+	TupleDesc	tupdesc;
 
 	fexpr = stmt->funcexpr;
 

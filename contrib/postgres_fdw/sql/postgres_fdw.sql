@@ -142,14 +142,6 @@ CREATE FOREIGN TABLE ft6 (
 	c3 text
 ) SERVER loopback2 OPTIONS (schema_name 'S 1', table_name 'T 4');
 
--- A table with oids. CREATE FOREIGN TABLE doesn't support the
--- WITH OIDS option, but ALTER does.
-CREATE FOREIGN TABLE ft_pg_type (
-	typname name,
-	typlen smallint
-) SERVER loopback OPTIONS (schema_name 'pg_catalog', table_name 'pg_type');
-ALTER TABLE ft_pg_type SET WITH OIDS;
-
 -- ===================================================================
 -- tests for validator
 -- ===================================================================
@@ -815,6 +807,9 @@ create operator class my_op_class for type int using btree family my_op_family a
 explain (verbose, costs off)
 select array_agg(c1 order by c1 using operator(public.<^)) from ft2 where c2 = 6 and c1 < 100 group by c2;
 
+-- Update local stats on ft2
+ANALYZE ft2;
+
 -- Add into extension
 alter extension postgres_fdw add operator class my_op_class using btree;
 alter extension postgres_fdw add function my_op_cmp(a int, b int);
@@ -1002,9 +997,6 @@ SELECT * FROM ft1 t1 WHERE t1.ctid = '(0,2)';
 EXPLAIN (VERBOSE, COSTS OFF)
 SELECT ctid, * FROM ft1 t1 LIMIT 1;
 SELECT ctid, * FROM ft1 t1 LIMIT 1;
-EXPLAIN (VERBOSE, COSTS OFF)
-SELECT oid, * FROM ft_pg_type WHERE typname = 'int4';
-SELECT oid, * FROM ft_pg_type WHERE typname = 'int4';
 
 -- ===================================================================
 -- used in PL/pgSQL function

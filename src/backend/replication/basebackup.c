@@ -189,12 +189,19 @@ static const char *excludeFiles[] =
 
 /*
  * List of files excluded from checksum validation.
+ *
+ * Note: this list should be kept in sync with what pg_verify_checksums.c
+ * includes.
  */
 static const char *const noChecksumFiles[] = {
 	"pg_control",
 	"pg_filenode.map",
 	"pg_internal.init",
 	"PG_VERSION",
+#ifdef EXEC_BACKEND
+	"config_exec_params",
+	"config_exec_params.new",
+#endif
 	NULL,
 };
 
@@ -1686,7 +1693,7 @@ throttle(size_t increment)
 		 * the maximum time to sleep. Thus the cast to long is safe.
 		 */
 		wait_result = WaitLatch(MyLatch,
-								WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+								WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH,
 								(long) (sleep / 1000),
 								WAIT_EVENT_BASE_BACKUP_THROTTLE);
 
