@@ -3598,24 +3598,33 @@ main(int argc, char *argv[])
 	/*
 	 * Build up a shell command to tell the user how to start the server
 	 */
+	/*
+	 * 构建一个shell命令来告诉用户如何启动服务
+	 */
 	start_db_cmd = createPQExpBuffer();
 
 	/* Get directory specification used to start initdb ... */
+	/* 获取启动initdb的目录 ... */
 	strlcpy(pg_ctl_path, argv[0], sizeof(pg_ctl_path));
 	canonicalize_path(pg_ctl_path);
 	get_parent_directory(pg_ctl_path);
 	/* ... and tag on pg_ctl instead */
+	/* ... 换成pg_ctl */
 	join_path_components(pg_ctl_path, pg_ctl_path, "pg_ctl");
 
 	/* path to pg_ctl, properly quoted */
+	/* pg_ctl的路径，适当引用 */
 	appendShellString(start_db_cmd, pg_ctl_path);
 
 	/* add -D switch, with properly quoted data directory */
+	/* 加上-D选项，后面接着是引用的数据目录 */
 	appendPQExpBufferStr(start_db_cmd, " -D ");
 	appendShellString(start_db_cmd, pgdata_native);
 
 	/* add suggested -l switch and "start" command */
+	/* 加上建议的-l选项及"start"命令 */
 	/* translator: This is a placeholder in a shell command. */
+	/* 译者：这是shell命令中的占位符。 */
 	appendPQExpBuffer(start_db_cmd, " -l %s start", _("logfile"));
 
 	printf(_("\nSuccess. You can now start the database server using:\n\n"
