@@ -54,6 +54,16 @@ static void walkdir(const char *path,
  *
  * Errors are reported but not considered fatal.
  */
+/*
+ * 在PGDATA指定的目录下递归fsync所有的内容。
+ *
+ * 我们fsync普通文件和目录，不管它们在哪里。但我们只会跟随pg_wal（或pg_xlog）以及pg_tblspc
+ * 下的符号链接。其他假定指向文件的符号链接，我们不需要fsync，并且可能根本就没有写权限。
+ *
+ * serverVersion参数指定了需要fsync的服务器的版本。
+ *
+ * 会报告错误，但不会作为致命错误。
+ */
 void
 fsync_pgdata(const char *pg_data,
 			 const char *progname,
@@ -64,12 +74,17 @@ fsync_pgdata(const char *pg_data,
 	char		pg_tblspc[MAXPGPATH];
 
 	/* handle renaming of pg_xlog to pg_wal in post-10 clusters */
+	/* 处理版本10之后的集群，pg_xlog重命名为pg_wal的情况 */
 	snprintf(pg_wal, MAXPGPATH, "%s/%s", pg_data,
 			 serverVersion < MINIMUM_VERSION_FOR_PG_WAL ? "pg_xlog" : "pg_wal");
 	snprintf(pg_tblspc, MAXPGPATH, "%s/pg_tblspc", pg_data);
 
 	/*
 	 * If pg_wal is a symlink, we'll need to recurse into it separately,
+	 * because the first walkdir below will ignore it.
+	 */
+	/*
+	 * 如果pg_wal是一个符号链接， is a symlink, we'll need to recurse into it separately,
 	 * because the first walkdir below will ignore it.
 	 */
 	xlog_is_symlink = false;
