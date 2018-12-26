@@ -150,6 +150,10 @@ TransactionId *ParallelCurrentXids;
  * globally accessible, so can be set from anywhere in the code that requires
  * recording flags.
  */
+/*
+ * 其余的标志比特位，用来记录发生在最高级事务中的事件。这些标志只会保存在MyXactFlags中，提示我们
+ * 记住在这个事务中需要做某些事。全局可访问，所以可以在代码任何需要记录标志的地方设置这个变量。
+ */
 int			MyXactFlags;
 
 /*
