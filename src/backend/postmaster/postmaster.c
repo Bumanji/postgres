@@ -62,6 +62,66 @@
  *
  *-------------------------------------------------------------------------
  */
+/*-------------------------------------------------------------------------
+ *
+ * postmaster.c
+ *	  这个程序在POSTGRES系统中，起到一个请求交换所的作用。前台程序发送一个启动消息给
+ *	  Postmaster，然后postmaster使用消息中的信息来设置一个后台进程。
+ *
+ *	  postmaster也会管理系统级操作，比如启动、停止。postmaster自身不会做这些操作，
+ *	  注意——它只是在正确的时间执行一个子进程来做这些操作。它还会在一个后台进程崩溃的
+ *	  时候重置系统。
+ *
+ *	  The postmaster process creates the shared memory and semaphore
+ *	  pools during startup, but as a rule does not touch them itself.
+ *	  In particular, it is not a member of the PGPROC array of backends
+ *	  and so it cannot participate in lock-manager operations.  Keeping
+ *	  the postmaster away from shared memory operations makes it simpler
+ *	  and more reliable.  The postmaster is almost always able to recover
+ *	  from crashes of individual backends by resetting shared memory;
+ *	  if it did much with shared memory then it would be prone to crashing
+ *	  along with the backends.
+ *
+ *	  When a request message is received, we now fork() immediately.
+ *	  The child process performs authentication of the request, and
+ *	  then becomes a backend if successful.  This allows the auth code
+ *	  to be written in a simple single-threaded style (as opposed to the
+ *	  crufty "poor man's multitasking" code that used to be needed).
+ *	  More importantly, it ensures that blockages in non-multithreaded
+ *	  libraries like SSL or PAM cannot cause denial of service to other
+ *	  clients.
+ *
+ *
+ * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1994, Regents of the University of California
+ *
+ *
+ * IDENTIFICATION
+ *	  src/backend/postmaster/postmaster.c
+ *
+ * NOTES
+ *
+ * Initialization:
+ *		The Postmaster sets up shared memory data structures
+ *		for the backends.
+ *
+ * Synchronization:
+ *		The Postmaster shares memory with the backends but should avoid
+ *		touching shared memory, so as not to become stuck if a crashing
+ *		backend screws up locks or shared memory.  Likewise, the Postmaster
+ *		should never block on messages from frontend clients.
+ *
+ * Garbage Collection:
+ *		The Postmaster cleans up after backends if they have an emergency
+ *		exit and/or core dump.
+ *
+ * Error Reporting:
+ *		Use write_stderr() only for reporting "interactive" errors
+ *		(essentially, bogus arguments on the command line).  Once the
+ *		postmaster is launched, use ereport().
+ *
+ *-------------------------------------------------------------------------
+ */
 
 #include "postgres.h"
 
