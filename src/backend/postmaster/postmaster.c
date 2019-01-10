@@ -72,53 +72,41 @@
  *	  注意——它只是在正确的时间执行一个子进程来做这些操作。它还会在一个后台进程崩溃的
  *	  时候重置系统。
  *
- *	  The postmaster process creates the shared memory and semaphore
- *	  pools during startup, but as a rule does not touch them itself.
- *	  In particular, it is not a member of the PGPROC array of backends
- *	  and so it cannot participate in lock-manager operations.  Keeping
- *	  the postmaster away from shared memory operations makes it simpler
- *	  and more reliable.  The postmaster is almost always able to recover
- *	  from crashes of individual backends by resetting shared memory;
- *	  if it did much with shared memory then it would be prone to crashing
- *	  along with the backends.
+ *	  postmaster进程在启动的时候会创建共享内存和信号量池，但作为一个原则自己不会碰它们。
+ *	  特别的是，它不是后台PGPROC数组的成员，所以它无法加入锁管理器的操作。让postmaster
+ *	  离开共享内存的操作，会使它简单且更可靠。postmaster几乎总是可以通过重设共享内存的方式
+ *	  来从单个的后台进程崩溃中恢复；如果它对共享内存做了过多的操作，它可能就会随后台进程一起
+ *	  崩溃。
  *
- *	  When a request message is received, we now fork() immediately.
- *	  The child process performs authentication of the request, and
- *	  then becomes a backend if successful.  This allows the auth code
- *	  to be written in a simple single-threaded style (as opposed to the
- *	  crufty "poor man's multitasking" code that used to be needed).
- *	  More importantly, it ensures that blockages in non-multithreaded
- *	  libraries like SSL or PAM cannot cause denial of service to other
- *	  clients.
+ *	  当接收到一个请求消息的时候，我们会立即调用fork()函数。子进程对请求进行认证，如果成功
+ *	  的话，将成为一个后台进程。这使得认证代码可以写成简单的单线程的形式（而不是以前混沌的
+ *	  “穷人的多任务”代码）。更重要的是，这保证了非多线程的库，比如SSL或PAM的阻塞，不会引发
+ *	  对其他客户端拒绝访问服务。
  *
  *
  * Portions Copyright (c) 1996-2018, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
- * IDENTIFICATION
+ * 标识
  *	  src/backend/postmaster/postmaster.c
  *
- * NOTES
+ * 注意
  *
- * Initialization:
- *		The Postmaster sets up shared memory data structures
- *		for the backends.
+ * 初始化：
+ *		Postmaster设置后台进程用到的共享内存数据结构。
  *
- * Synchronization:
- *		The Postmaster shares memory with the backends but should avoid
- *		touching shared memory, so as not to become stuck if a crashing
- *		backend screws up locks or shared memory.  Likewise, the Postmaster
- *		should never block on messages from frontend clients.
+ * 同步：
+ *		Postmaster跟后台进程共享内存，但应该避免碰共享内存，这样就不会因崩溃的后台
+ *		进程弄乱了锁或共享内存而错乱。同样的，Postmaster应该永远都不会阻塞在前台客户端
+ *		发来的消息上。
  *
- * Garbage Collection:
- *		The Postmaster cleans up after backends if they have an emergency
- *		exit and/or core dump.
+ * 垃圾收集：
+ *		Postmaster会在后台进程紧急退出或内核转储后进行清理。
  *
- * Error Reporting:
- *		Use write_stderr() only for reporting "interactive" errors
- *		(essentially, bogus arguments on the command line).  Once the
- *		postmaster is launched, use ereport().
+ * 错误报告：
+ *		只使用write_stderr()来报告“交互式”错误（本质上是命令行中构造的参数）。一旦
+ *		postmaster被执行，则使用ereport()。
  *
  *-------------------------------------------------------------------------
  */
